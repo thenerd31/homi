@@ -62,10 +62,9 @@ export default function TextInputPage() {
       }
     } catch (error) {
       console.error('Conversation error:', error);
-      setConversationHistory([
-        ...updatedHistory,
-        { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }
-      ]);
+      // For now, just navigate to swipe page even if API fails (for UI testing)
+      console.log('Skipping API error, navigating to swipe page for UI testing');
+      router.push('/discover/swipe');
     } finally {
       setIsLoading(false);
     }

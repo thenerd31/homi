@@ -98,7 +98,7 @@ export default function SwipePage() {
   const handleSuperLike = async () => {
     console.log('Super liked listing:', currentListing.id);
 
-    // Send to backend as regular like (super like = like with higher priority)
+    // send to backend as regular like (super like = like with higher priority)
     try {
       await api.swipe({
         user_id: userId,
@@ -134,6 +134,28 @@ export default function SwipePage() {
     setTimeout(handleLike, 300);
   };
 
+  // Add keyboard event listener
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Prevent action if card is already exiting
+      if (exitDirection) return;
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        swipeLeft();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        swipeRight();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        handleSuperLike();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [exitDirection]); // Re-attach listener when exitDirection changes
+
   if (!currentListing) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-stone-100 to-stone-200 flex items-center justify-center">
@@ -143,7 +165,7 @@ export default function SwipePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-stone-100 to-stone-200 flex flex-col">
+    <div className="min-h-screen bg-[#DFDFD3] flex flex-col">
       {/* Header */}
       <div className="pt-8 px-6 text-center">
         <h1 className="text-3xl font-melodrame italic text-stone-900">
