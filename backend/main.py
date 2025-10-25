@@ -9,6 +9,9 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
 import httpx
+import base64
+import uuid
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Import our modules
@@ -25,6 +28,7 @@ from services.saved_listings_service import SavedListingsService
 from services.seller_chatbot_service import SellerChatbotService
 from services.image_filter_service import ImageFilterService
 from services.preference_analysis_service import PreferenceAnalysisService
+from services.yolo_service import YOLOService
 # Fetch.ai agents are separate processes - see agents/fetch_agents/
 from utils.elastic_client import ElasticClient
 from utils.supabase_client import SupabaseClient
@@ -62,6 +66,11 @@ saved_listings_service = SavedListingsService()
 seller_chatbot_service = SellerChatbotService()
 image_filter_service = ImageFilterService()
 preference_analysis_service = PreferenceAnalysisService()
+try:
+    yolo_service = YOLOService(model_path="yolov8n.pt")  # Fast nano model for real-time detection
+except Exception as e:
+    print(f"Warning: YOLOService initialization failed: {e}. YOLO endpoints will be unavailable.")
+    yolo_service = None
 elastic_client = ElasticClient()
 supabase_client = SupabaseClient()
 # arize_logger = ArizeLogger()  # Placeholder
@@ -123,6 +132,18 @@ class ConfirmPricingRequest(BaseModel):
     listing_id: str
     pricing: Dict[str, Any]  # Pricing data (can be AI-suggested or manual)
     availability: List[Dict[str, str]]
+
+class SpectaclesDetectRequest(BaseModel):
+    image_base64: str  # Base64 encoded JPEG image
+    session_id: Optional[str] = None  # Optional session tracking
+    timestamp: Optional[str] = None  # Capture timestamp
+
+class SpectaclesScanSessionRequest(BaseModel):
+    user_id: Optional[str] = None
+    property_address: Optional[str] = None
+
+class SpectaclesFinalizeRequest(BaseModel):
+    session_id: str
 
 
 # ============================================================================
@@ -961,6 +982,184 @@ async def start_ai_tour(listing_id: str):
             "note": "AI guide ready. Join room to start automated tour."
         }
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+spectacles_sessions = {} # local host for now migrate to supabase later
+
+@app.post("/api/spectacles/scan-session")
+async def start_scan_session(request: SpectaclesScanSessionRequest):
+    try:
+        session_id = str(uuid.uuid4())
+
+        spectacles_sessions[session_id] = {
+            "session_id": session_id,
+            "user_id": request.user_id or "guest",
+            "property_address": request.property_address,
+            "created_at": datetime.utcnow().isoformat(),
+            "captures": [],  # Store all captured images
+            "detections": [],  # Store all detection results
+            "status": "active"
+        }
+
+        return {
+            "success": True,
+            "session_id": session_id,
+            "message": "Scan session started. Begin capturing frames."
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/spectacles/detect")
+async def detect_objects_spectacles(request: SpectaclesDetectRequest):
+    try:
+        if not yolo_service:
+            raise HTTPException(
+                status_code=503,
+                detail="YOLO service unavailable. Install ultralytics: pip install ultralytics"
+            )
+
+        # Decode base64 image
+        try:
+            image_bytes = base64.b64decode(request.image_base64)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid base64 image: {str(e)}")
+
+        # Run YOLO detection
+        result = await yolo_service.detect_amenities_from_image(
+            image_data=image_bytes,
+            image_format="jpeg"
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result.get("error", "Detection failed"))
+
+        # Store in session if session_id provided
+        if request.session_id and request.session_id in spectacles_sessions:
+            session = spectacles_sessions[request.session_id]
+            session["captures"].append({
+                "timestamp": request.timestamp or datetime.utcnow().isoformat(),
+                "image_size": result["image_size"],
+                "detections": result["detections"],
+                "quality_score": result["quality_score"]
+            })
+            session["detections"].append(result)
+
+        # Format response for AR overlay rendering
+        # Include bbox coordinates for Lens Studio to draw AR labels
+        ar_objects = []
+        for detection in result["detections"]:
+            ar_objects.append({
+                "object": detection["object"],
+                "confidence": detection["confidence"],
+                "bbox": detection["bbox"],  # [x1, y1, x2, y2]
+                "relative_size": detection["relative_size"]
+            })
+
+        # Return detected amenities for user feedback
+        amenities_detected = list(set(result["amenities"]))[:10]  # Top 10 unique amenities for listing description, pass through LLM.
+
+        return {
+            "success": True,
+            "timestamp": request.timestamp or datetime.utcnow().isoformat(),
+            "objects": ar_objects,  # For AR overlay rendering
+            "amenities": amenities_detected,  # For display/feedback
+            "room_type": result["room_analysis"]["room_type"],
+            "room_confidence": result["room_analysis"]["confidence"],
+            "quality_score": result["quality_score"],
+            "total_objects": result["total_objects"],
+            "image_size": result["image_size"]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/spectacles/finalize")
+async def finalize_scan_session(request: SpectaclesFinalizeRequest):
+    try:
+        if request.session_id not in spectacles_sessions:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        session = spectacles_sessions[request.session_id]
+
+        if session["status"] != "active":
+            raise HTTPException(status_code=400, detail="Session already finalized")
+
+        if not yolo_service:
+            raise HTTPException(status_code=503, detail="YOLO service unavailable")
+
+        # Get all captured images (we stored detection results, not raw images)
+        all_detections = session["detections"]
+
+        if not all_detections:
+            raise HTTPException(status_code=400, detail="No captures in this session")
+
+        # Aggregate results across all captures
+        all_amenities = set()
+        all_objects = []
+        room_types = []
+        quality_scores = []
+
+        for detection in all_detections:
+            all_amenities.update(detection["amenities"])
+            all_objects.extend(detection["detected_objects"])
+            room_types.append(detection["room_analysis"]["room_type"])
+            quality_scores.append(detection["quality_score"])
+
+        # Calculate room counts (simplified - count unique room type occurrences)
+        from collections import Counter
+        room_counts = Counter(room_types)
+
+        rooms = {
+            "bedrooms": room_counts.get("bedroom", 0),
+            "bathrooms": room_counts.get("bathroom", 0),
+            "has_kitchen": room_counts.get("kitchen", 0) > 0,
+            "has_living_room": room_counts.get("living_room", 0) > 0,
+            "has_dining_room": room_counts.get("dining_room", 0) > 0,
+            "total_rooms": len(room_counts)
+        }
+
+        # Average quality score
+        avg_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 50
+
+        # Infer property type
+        if rooms["bedrooms"] >= 3:
+            property_type = "Entire house"
+        elif rooms["bedrooms"] >= 2:
+            property_type = "Entire apartment"
+        elif rooms["bedrooms"] == 1:
+            property_type = "Studio apartment" if rooms["has_kitchen"] else "Private room"
+        else:
+            property_type = "Room"
+
+        # Update session
+        session["status"] = "completed"
+        session["completed_at"] = datetime.utcnow().isoformat()
+        session["final_analysis"] = {
+            "amenities": sorted(list(all_amenities)),
+            "rooms": rooms,
+            "property_type": property_type,
+            "quality_score": round(avg_quality, 1),
+            "total_captures": len(all_detections),
+            "unique_objects": len(set(all_objects))
+        }
+
+        return {
+            "success": True,
+            "session_id": request.session_id,
+            "analysis": session["final_analysis"],
+            "message": f"Scan complete! Processed {len(all_detections)} captures.",
+            "next_step": "Use this data to generate listing via /api/seller/chat"
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

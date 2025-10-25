@@ -1,11 +1,3 @@
-"""
-YOLOv8 Service - Comprehensive Property Amenity Detection
-Used for: Detecting furniture, amenities, features, and property characteristics
-Sponsor: Baseten (ML model deployment)
-
-Detects 80+ COCO classes and maps them to 50+ Airbnb-relevant amenities
-"""
-
 from ultralytics import YOLO
 import cv2
 import numpy as np
@@ -130,14 +122,9 @@ class YOLOService:
             "book": 5.0,
             "potted plant": 6.0,
             "vase": 7.0,
-            "laptop": 5.0,
             "tv": 4.0,
             "couch": 6.0,
             "dining table": 5.0,
-            "bicycle": 4.0,
-            "surfboard": 7.0,
-            "boat": 10.0,
-            "horse": 10.0,
         }
 
     # def _create_family_indicators(self) -> Set[str]:
@@ -362,7 +349,7 @@ class YOLOService:
                 if obj in detected_classes_set
             )
             secondary_matches = sum(
-                1 for obj in indicators["secondary"]
+                1 for obj in indicators.get("secondary", [])
                 if obj in detected_classes_set
             )
 
@@ -372,7 +359,7 @@ class YOLOService:
                 room_scores[room_type] = score
 
         if room_scores:
-            best_match = max(room_scores, key=room_scores.get)
+            best_match = max(room_scores, key=lambda k: room_scores[k])
             confidence = min(room_scores[best_match] / 10.0, 1.0)
 
             return {
