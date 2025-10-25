@@ -30,7 +30,7 @@ export default function DiscoverPage() {
           {/* input buttons */}
           <div className="flex gap-6 pb-8">
             <button
-              onClick={() => router.push('/discover/input/text')}
+              onClick={() => router.push('/discover/text')}
               className="w-16 h-16 rounded-full bg-stone-600 hover:bg-stone-700 transition-all flex items-center justify-center shadow-lg active:scale-95"
               aria-label="Type your preference"
             >
@@ -38,7 +38,7 @@ export default function DiscoverPage() {
             </button>
 
             <button
-              onClick={() => router.push('/discover/input/voice')}
+              onClick={() => router.push('/discover/voice')}
               className="w-20 h-20 rounded-full bg-stone-700 hover:bg-stone-800 transition-all flex items-center justify-center shadow-lg active:scale-95"
               aria-label="Speak your preference"
             >
@@ -46,7 +46,7 @@ export default function DiscoverPage() {
             </button>
 
             <button
-              onClick={() => router.push('/discover/input/images')}
+              onClick={() => router.push('/discover/multimodal')}
               className="w-16 h-16 rounded-full bg-stone-600 hover:bg-stone-700 transition-all flex items-center justify-center shadow-lg active:scale-95"
               aria-label="Upload images"
             >
