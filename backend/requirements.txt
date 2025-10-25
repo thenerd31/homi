@@ -34,6 +34,7 @@ opentelemetry-sdk
 # Image Processing
 pillow
 opencv-python
+ultralytics  # YOLOv8 for Spectacles object detection
 
 # Utilities
 python-dotenv
