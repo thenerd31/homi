@@ -62,6 +62,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* Vapi Web SDK - Voice AI Integration */}
+        <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web@latest/dist/index.js"></script>
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${hind.variable} ${melodrame.variable} antialiased`}
       >

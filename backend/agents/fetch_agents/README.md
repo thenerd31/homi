@@ -280,9 +280,9 @@ MIT - CalHacks 2025
 
 ## 👥 Team
 
-Built by Team VIBE for CalHacks 2025
+Built by Aswin Surya, Victor Desouza, Yuxin Zeng, and Alistar Qian Xiao for CalHacks 2025
 
-**Tracks**: YC, Fetch.ai, Anthropic, Postman, LiveKit, Snap, Groq, Letta, Elastic, Vapi, Toolhouse, Arize, Sui
+**Tracks**: YC, Fetch.ai, Anthropic, Postman, LiveKit, Snap, Groq, Letta, Elastic, Vapi, Toolhouse, Arize
 
 ---
 

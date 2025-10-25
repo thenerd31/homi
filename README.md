@@ -560,7 +560,6 @@ GET  /api/calendar/{listing_id}  # Availability calendar
 | **LiveKit** (optional) | Live tours | Optional video tours feature |
 | **Toolhouse** | Tool management | Function calling for agents |
 | **Arize** | Monitoring | Trace AI decisions, detect hallucinations |
-| **Sui** (optional) | Blockchain | On-chain reviews |
 
 ---
 

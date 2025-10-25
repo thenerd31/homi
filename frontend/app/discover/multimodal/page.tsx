@@ -64,10 +64,16 @@ export default function MultimodalInputPage() {
 
         // If we have enough info, execute search
         if (convResponse.status === 'ready_to_search') {
-          await api.executeSearch({
+          const searchResult = await api.executeSearch({
             extracted_params: convResponse.extracted_params,
             user_id: userId
           });
+
+          // Store search results in localStorage for swipe page
+          if (searchResult.success && searchResult.matches) {
+            localStorage.setItem('vibe_search_results', JSON.stringify(searchResult.matches));
+            localStorage.setItem('vibe_user_id', userId);
+          }
 
           // Navigate to swipe page
           router.push('/discover/swipe');

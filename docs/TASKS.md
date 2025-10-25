@@ -331,7 +331,7 @@ This document breaks down all tasks for a 4-person team. Estimate: 36-48 hours o
 
 ---
 
-## 🌐 Person 5 (Optional): Postman & Blockchain
+## 🌐 Person 5 (Optional): Postman
 
 ### Postman Flows (4 hours) 📮 **SPONSOR TRACK**
 
@@ -355,22 +355,6 @@ This document breaks down all tasks for a 4-person team. Estimate: 36-48 hours o
 - [ ] Document input/output format
 - [ ] Create README in Postman workspace
 
-### Sui Blockchain (3 hours) ⛓️ **SUI TRACK**
-
-**Smart Contract** (2 hours)
-- [ ] Set up Sui development environment
-- [ ] Create `review_system.move` contract
-  - Store reviews on-chain
-  - Link to listing ID
-  - Prevent tampering
-  - Reputation scoring
-- [ ] Deploy to Sui testnet
-
-**Frontend Integration** (1 hour)
-- [ ] Install Sui wallet SDK
-- [ ] Add "Submit Review" button
-- [ ] Sign transaction with wallet
-- [ ] Display on-chain reviews
 
 ---
 
@@ -453,10 +437,6 @@ This document breaks down all tasks for a 4-person team. Estimate: 36-48 hours o
 ### Arize
 - [ ] Phoenix tracing implemented
 - [ ] Evals set up
-
-### Sui
-- [ ] Smart contract deployed
-- [ ] Reviews on-chain
 
 ---
 

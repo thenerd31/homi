@@ -3,6 +3,20 @@ VIBE - AI-Native Home Sharing Platform
 Main FastAPI Application
 """
 
+# ARIZE PHOENIX - Observability & Tracing
+# Must be imported BEFORE any Anthropic SDK usage
+from phoenix.otel import register
+from openinference.instrumentation.anthropic import AnthropicInstrumentor
+
+# Register Phoenix tracing
+tracer_provider = register(
+    project_name="vibe-ai-platform",
+    endpoint="http://localhost:6006/v1/traces"
+)
+
+# Instrument Anthropic SDK to trace all Claude API calls
+AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -19,12 +33,12 @@ from services.groq_service import GroqService
 from services.qa_service import QAService
 from services.pricing_service import PricingService
 from services.voice_service import VoiceService
-from services.livekit_service import LiveKitService
 from services.conversation_service import ConversationService
 from services.saved_listings_service import SavedListingsService
 from services.seller_chatbot_service import SellerChatbotService
 from services.image_filter_service import ImageFilterService
 from services.preference_analysis_service import PreferenceAnalysisService
+from services.vapi_service import VapiService, get_vapi_service
 # Fetch.ai agents are separate processes - see agents/fetch_agents/
 from utils.elastic_client import ElasticClient
 from utils.supabase_client import SupabaseClient
@@ -56,12 +70,12 @@ groq_service = GroqService()
 qa_service = QAService()
 pricing_service = PricingService()
 voice_service = VoiceService()
-livekit_service = LiveKitService()
 conversation_service = ConversationService()
 saved_listings_service = SavedListingsService()
 seller_chatbot_service = SellerChatbotService()
 image_filter_service = ImageFilterService()
 preference_analysis_service = PreferenceAnalysisService()
+vapi_service = get_vapi_service()
 elastic_client = ElasticClient()
 supabase_client = SupabaseClient()
 # arize_logger = ArizeLogger()  # Placeholder
@@ -872,116 +886,6 @@ async def get_ar_data(listing_id: str):
     return ar_data
 
 
-@app.post("/api/listings/{listing_id}/start-tour")
-async def start_virtual_tour(
-    listing_id: str,
-    host_name: str = "Host",
-    guest_name: str = "Guest",
-    use_spectacles: bool = False
-):
-    """
-    🎥 Start live virtual tour with LiveKit
-
-    Sponsors: LiveKit, Snap (if using Spectacles)
-
-    Two modes:
-    1. Regular video tour (host uses phone/webcam)
-    2. Spectacles tour (host wears Snap Spectacles for POV)
-
-    Connect guest with host for real-time video tour
-    """
-    try:
-        # Get listing data
-        listing = await supabase_client.get_listing(listing_id)
-
-        # Create LiveKit room
-        room_data = await livekit_service.create_tour_room(
-            listing_id=listing_id,
-            host_name=host_name,
-            guest_name=guest_name
-        )
-
-        # If using Spectacles, include AR overlay data
-        if use_spectacles:
-            ar_data = await vision_service.generate_ar_layout(
-                listing.get("photos", [])
-            )
-            room_data["ar_overlays"] = ar_data
-            room_data["mode"] = "spectacles_pov"
-        else:
-            room_data["mode"] = "standard_video"
-
-        return {
-            **room_data,
-            "listing_title": listing.get("title", "Property"),
-            "instructions": {
-                "host": "Use your device camera or Snap Spectacles to give the tour",
-                "guest": "You'll see the tour in real-time with AR annotations" if use_spectacles else "Watch the live tour"
-            }
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/listings/{listing_id}/start-ai-tour")
-async def start_ai_tour(listing_id: str):
-    """
-    🤖 Start AI-powered virtual tour
-
-    Sponsors: LiveKit, Anthropic (Claude Vision), Groq
-
-    Creates an AI tour guide that:
-    - Narrates through property photos/video
-    - Answers questions in real-time
-    - Available 24/7 (no human host needed)
-
-    This is the "MOST COMPLEX" LiveKit feature:
-    - Real-time video analysis
-    - Voice synthesis
-    - Contextual AI responses
-    """
-    try:
-        # Get listing data
-        listing = await supabase_client.get_listing(listing_id)
-
-        # Create AI tour guide
-        ai_guide = await livekit_service.create_ai_tour_guide(
-            listing_id=listing_id,
-            listing_data=listing
-        )
-
-        return {
-            "success": True,
-            "guide_id": ai_guide["guide_id"],
-            "room_token": ai_guide["room_token"],
-            "tour_script": ai_guide["tour_script"],
-            "capabilities": ai_guide["capabilities"],
-            "listing_title": listing.get("title", "Property"),
-            "note": "AI guide ready. Join room to start automated tour."
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ============================================================================
-# BLOCKCHAIN - REVIEWS & REPUTATION
-# ============================================================================
-
-@app.post("/api/reviews/submit")
-async def submit_review(listing_id: str, review: Dict[str, Any]):
-    """
-    ⛓️ Submit review to Sui blockchain
-
-    Sponsors: Sui
-
-    Immutable, tamper-proof reviews
-    """
-    # TODO: Implement Sui smart contract interaction
-    return {"success": True, "tx_hash": "0x..."}
-
-
 # ============================================================================
 # VAPI VOICE CONVERSATIONS (Real-time voice Q&A with listings)
 # ============================================================================
@@ -1162,6 +1066,59 @@ async def vapi_get_listing_context(listing_id: str):
 # MONITORING & HEALTH
 # ============================================================================
 
+# ============================================================================
+# 🎙️ VAPI VOICE AI ENDPOINTS
+# ============================================================================
+
+@app.get("/api/vapi/assistant")
+async def get_vapi_assistant():
+    """
+    🎙️ Get Vapi assistant configuration
+
+    Sponsor: Vapi
+
+    Returns assistant config for frontend Web SDK
+    """
+    try:
+        config = vapi_service.create_assistant()
+        return {
+            "success": True,
+            "assistant": config
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/vapi/webhook")
+async def vapi_webhook(request: Dict[str, Any]):
+    """
+    🎙️ Webhook for Vapi voice calls
+
+    Sponsor: Vapi
+
+    Handles events from Vapi during voice conversations:
+    - assistant-request: Vapi requesting assistant config
+    - function-call: Execute function from voice command
+    - transcript: Speech transcription
+    - end-of-call-report: Call summary
+    """
+    try:
+        event_type = request.get("message", {}).get("type", "")
+        message = request.get("message", {})
+
+        response = await vapi_service.handle_webhook(
+            event_type=event_type,
+            message=message,
+            user_id=request.get("call", {}).get("customer", {}).get("number", "voice-user")
+        )
+
+        return response
+
+    except Exception as e:
+        print(f"Vapi webhook error: {e}")
+        return {"error": str(e)}
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -1174,7 +1131,7 @@ async def health_check():
             "qa": await qa_service.health(),
             "pricing": await pricing_service.health(),
             "voice": await voice_service.health(),
-            "livekit": await livekit_service.health()
+            "vapi": await vapi_service.health()
         }
     }
 

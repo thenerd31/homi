@@ -28,6 +28,7 @@ requests==2.31.0
 
 # Observability
 arize-phoenix==3.0.0
+openinference-instrumentation-anthropic
 opentelemetry-api==1.22.0
 opentelemetry-sdk==1.22.0
 

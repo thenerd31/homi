@@ -358,27 +358,6 @@ AI Agent (decides which APIs) →
 
 ---
 
-## ⛓️ Sui Track
-
-**Requirements:**
-- [ ] Build on Sui blockchain
-- [ ] Reimagine existing app with Sui Stack
-
-**Our Implementation:**
-- [ ] On-chain reviews
-- [ ] Immutable reputation system
-- [ ] Smart contract for review storage
-
-**Deliverables:**
-- [ ] Smart contract code (`review_system.move`)
-- [ ] Deployed contract address (testnet)
-- [ ] Frontend integration
-- [ ] Demo of on-chain review
-
-**Status:** 🔴 Not Started
-
----
-
 ## 📈 Progress Summary
 
 **Track Progress:**
@@ -411,9 +390,8 @@ AI Agent (decides which APIs) →
 | Letta | 2 | P2 |
 | Elastic | 2 | P2 |
 | Arize | 1 | P2 |
-| Sui | 2 | P3 |
 | Others | 2 | P3 |
-| **TOTAL** | **48** | |
+| **TOTAL** | **46** | |
 
 ---
 
@@ -447,7 +425,6 @@ This hits: YC, Fetch.ai, Snap, Postman, Anthropic, Groq
 | Toolhouse | TBD | TBD | ⬜ |
 | Arize | TBD | TBD | ⬜ |
 | Vapi | TBD | TBD | ⬜ |
-| Sui | TBD | TBD | ⬜ |
 
 ---
 

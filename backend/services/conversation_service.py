@@ -149,6 +149,19 @@ If a parameter is mentioned but unclear, don't include it. Only include what you
             print(f"Extraction error: {e}")
             extracted_params = extracted_so_far
 
+        # Validate extracted parameters
+        validation_result = self._validate_params(extracted_params, user_message)
+
+        # If validation failed, ask user to correct
+        if not validation_result["valid"]:
+            return {
+                "status": "collecting",
+                "message": validation_result["error_message"],
+                "extracted_params": validation_result["corrected_params"],
+                "missing_params": [],
+                "suggestions": validation_result.get("suggestions", [])
+            }
+
         # Check which params are missing
         missing_params = []
         for param in self.REQUIRED_PARAMS:
@@ -308,6 +321,108 @@ Use today's date context if needed. Today is 2025-10-25.
             return result.get("value")
         except:
             return quick_reply  # Return raw if parsing fails
+
+    def _validate_params(self, params: Dict[str, Any], user_message: str) -> Dict[str, Any]:
+        """
+        Validate extracted parameters for reasonableness
+
+        Returns:
+        {
+            "valid": bool,
+            "error_message": str (if invalid),
+            "corrected_params": dict (params with invalid ones removed),
+            "suggestions": list (alternative options)
+        }
+        """
+        corrected_params = params.copy()
+
+        # Validate location - should be a single location
+        if "location" in params:
+            location = params["location"]
+            # Check if multiple locations mentioned (contains comma separating cities)
+            if isinstance(location, str):
+                # Check for multiple distinct cities
+                location_parts = [p.strip() for p in location.split(',')]
+                # If more than 2 parts, or if contains "and" or "or", might be multiple locations
+                if len(location_parts) > 2 or ' and ' in location.lower() or ' or ' in location.lower():
+                    # Check if it's actually multiple cities vs "City, State"
+                    possible_cities = []
+                    for part in location_parts:
+                        # Common city indicators
+                        if any(word in part.lower() for word in ['francisco', 'luis obispo', 'angeles', 'diego', 'jose', 'york', 'miami', 'austin', 'beach']):
+                            possible_cities.append(part)
+
+                    if len(possible_cities) > 1:
+                        corrected_params.pop("location", None)
+                        return {
+                            "valid": False,
+                            "error_message": "I can only search one location at a time. Which city would you like to focus on?",
+                            "corrected_params": corrected_params,
+                            "suggestions": possible_cities[:4]  # Show up to 4 options
+                        }
+
+        # Validate guests - should be reasonable (1-20)
+        if "guests" in params:
+            guests = params["guests"]
+            if isinstance(guests, (int, float)):
+                if guests > 20:
+                    corrected_params.pop("guests", None)
+                    return {
+                        "valid": False,
+                        "error_message": "That's a lot of people! Most rentals accommodate up to 20 guests. How many guests will there be?",
+                        "corrected_params": corrected_params,
+                        "suggestions": ["2 guests", "4-6 guests", "8-10 guests", "15-20 guests"]
+                    }
+                elif guests < 1:
+                    corrected_params.pop("guests", None)
+                    return {
+                        "valid": False,
+                        "error_message": "You need at least 1 guest! How many people will be staying?",
+                        "corrected_params": corrected_params,
+                        "suggestions": ["Just me", "2 guests", "3-4 guests", "5+ guests"]
+                    }
+
+        # Validate price_max - should be reasonable ($50-$10000)
+        if "price_max" in params:
+            price = params["price_max"]
+            if isinstance(price, (int, float)):
+                if price > 10000:
+                    corrected_params.pop("price_max", None)
+                    return {
+                        "valid": False,
+                        "error_message": "That budget is quite high! What's a reasonable nightly rate you're comfortable with?",
+                        "corrected_params": corrected_params,
+                        "suggestions": ["$500/night", "$1000/night", "$2000/night", "$5000/night"]
+                    }
+                elif price < 20:
+                    corrected_params.pop("price_max", None)
+                    return {
+                        "valid": False,
+                        "error_message": "That budget might be too low for most rentals. What's your budget per night?",
+                        "corrected_params": corrected_params,
+                        "suggestions": ["Under $100", "$100-$200", "$200-$500", "$500+"]
+                    }
+
+        # Validate bedrooms - should be reasonable (0-15)
+        if "bedrooms" in params:
+            bedrooms = params["bedrooms"]
+            if isinstance(bedrooms, (int, float)):
+                if bedrooms > 15:
+                    corrected_params.pop("bedrooms", None)
+                    return {
+                        "valid": False,
+                        "error_message": "That's a mansion! Most rentals have up to 10 bedrooms. How many bedrooms do you need?",
+                        "corrected_params": corrected_params,
+                        "suggestions": ["Studio", "1-2 bedrooms", "3-4 bedrooms", "5+ bedrooms"]
+                    }
+
+        # All validations passed
+        return {
+            "valid": True,
+            "error_message": "",
+            "corrected_params": corrected_params,
+            "suggestions": []
+        }
 
     async def health(self) -> bool:
         """Health check"""

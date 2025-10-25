@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, Check, Send, Mic } from 'lucide-react';
+import { X, Check, Send, Mic, Phone } from 'lucide-react';
 import { api, ConversationMessage } from '../../../lib/api';
+import VoiceSearchButton from '../../components/ui/voice-search-button';
 
 export default function TextInputPage() {
   const router = useRouter();
@@ -57,6 +58,13 @@ export default function TextInputPage() {
         });
 
         console.log('Search complete:', searchResult);
+
+        // Store search results in localStorage for swipe page
+        if (searchResult.success && searchResult.matches) {
+          localStorage.setItem('vibe_search_results', JSON.stringify(searchResult.matches));
+          localStorage.setItem('vibe_user_id', userId);
+        }
+
         // Navigate to swipe page (or results page)
         router.push('/discover/swipe');
       }
@@ -119,6 +127,31 @@ export default function TextInputPage() {
     }
   }, [audioBlob, isRecording]);
 
+  const handleVapiSearchComplete = async (params: any) => {
+    console.log('Vapi voice search complete with params:', params);
+
+    // Execute search with the params from Vapi
+    try {
+      setIsLoading(true);
+      const searchResult = await api.executeSearch({
+        extracted_params: params,
+        user_id: userId
+      });
+
+      if (searchResult.success && searchResult.matches) {
+        localStorage.setItem('vibe_search_results', JSON.stringify(searchResult.matches));
+        localStorage.setItem('vibe_user_id', userId);
+      }
+
+      router.push('/discover/swipe');
+    } catch (error) {
+      console.error('Search error:', error);
+      router.push('/discover/swipe');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const processAudio = async () => {
     if (!audioBlob) return;
 
@@ -165,6 +198,13 @@ export default function TextInputPage() {
           });
 
           console.log('Search complete:', searchResult);
+
+          // Store search results in localStorage for swipe page
+          if (searchResult.success && searchResult.matches) {
+            localStorage.setItem('vibe_search_results', JSON.stringify(searchResult.matches));
+            localStorage.setItem('vibe_user_id', userId);
+          }
+
           router.push('/discover/swipe');
         }
       }
@@ -314,6 +354,17 @@ export default function TextInputPage() {
           </button>
         </div>
       )}
+
+      {/* Vapi Voice AI Button - Floating in bottom-left */}
+      <div className="fixed bottom-24 left-6">
+        <VoiceSearchButton
+          onSearchComplete={handleVapiSearchComplete}
+          className="backdrop-blur-sm"
+        />
+        <p className="text-xs text-white/40 text-center mt-2 max-w-[120px]">
+          Powered by Vapi
+        </p>
+      </div>
     </div>
   );
 }

@@ -170,24 +170,6 @@ AI: "Yes! It's a gas fireplace, very easy to use. Perfect for cozy evenings.
 
 ---
 
-### 7. ⛓️ On-Chain Reviews (Sui Blockchain)
-**Problem**: Fake reviews, deleted bad reviews
-**Solution**: Immutable on-chain reviews
-
-**How It Works**:
-- Guest writes review after stay
-- Signs transaction with Sui wallet
-- Review stored permanently on Sui blockchain
-- Host can't delete or modify
-- Builds tamper-proof reputation
-
-**Reputation Score**:
-- Smart contract calculates score
-- Weighted by verified stays
-- Visible on every listing
-
----
-
 ## Advanced Ideas (If Time)
 
 ### 8. 🎭 "Vibe Check" Viral AI (Fetch.ai Personal AI)
@@ -441,7 +423,7 @@ A: Elastic handles billions of docs. Fetch.ai agents are distributed. Yes.
 A: User data stays encrypted. On-device processing where possible. No PII shared.
 
 **Q: Competitive moat?**
-A: Multi-agent architecture, AR integration, on-chain reputation. Hard to copy.
+A: Multi-agent architecture, AR integration, AI-powered personalization. Hard to copy.
 
 ---
 
@@ -451,7 +433,6 @@ A: Multi-agent architecture, AR integration, on-chain reputation. Hard to copy.
 - [ ] Multi-language support (Claude supports 100+ languages)
 - [ ] Accessibility features (screen reader for blind users)
 - [ ] Social booking (invite friends, split cost)
-- [ ] Crypto payments (via Sui)
 
 ---
 
@@ -466,7 +447,6 @@ A: Multi-agent architecture, AR integration, on-chain reputation. Hard to copy.
 
 ### Nice-to-Have
 - LiveKit tour working
-- Sui reviews deployed
 - Viral AI getting traction
 - Postman Flow published
 
