@@ -3,15 +3,26 @@ VIBE - AI-Native Home Sharing Platform
 Main FastAPI Application
 """
 
+# ARIZE PHOENIX - Observability & Tracing
+# Must be imported BEFORE any Anthropic SDK usage
+from phoenix.otel import register
+from openinference.instrumentation.anthropic import AnthropicInstrumentor
+
+# Register Phoenix tracing
+tracer_provider = register(
+    project_name="vibe-ai-platform",
+    endpoint="http://localhost:6006/v1/traces"
+)
+
+# Instrument Anthropic SDK to trace all Claude API calls
+AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
 import httpx
-import base64
-import uuid
-from datetime import datetime
 from dotenv import load_dotenv
 
 # Import our modules
@@ -22,13 +33,13 @@ from services.groq_service import GroqService
 from services.qa_service import QAService
 from services.pricing_service import PricingService
 from services.voice_service import VoiceService
-from services.livekit_service import LiveKitService
 from services.conversation_service import ConversationService
 from services.saved_listings_service import SavedListingsService
 from services.seller_chatbot_service import SellerChatbotService
 from services.image_filter_service import ImageFilterService
 from services.preference_analysis_service import PreferenceAnalysisService
-from services.yolo_service import YOLOService
+from services.vapi_service import VapiService, get_vapi_service
+from services.geocoding_service import GeocodingService
 # Fetch.ai agents are separate processes - see agents/fetch_agents/
 from utils.elastic_client import ElasticClient
 from utils.supabase_client import SupabaseClient
@@ -60,17 +71,13 @@ groq_service = GroqService()
 qa_service = QAService()
 pricing_service = PricingService()
 voice_service = VoiceService()
-livekit_service = LiveKitService()
 conversation_service = ConversationService()
 saved_listings_service = SavedListingsService()
 seller_chatbot_service = SellerChatbotService()
 image_filter_service = ImageFilterService()
 preference_analysis_service = PreferenceAnalysisService()
-try:
-    yolo_service = YOLOService(model_path="yolov8n.pt")  # Fast nano model for real-time detection
-except Exception as e:
-    print(f"Warning: YOLOService initialization failed: {e}. YOLO endpoints will be unavailable.")
-    yolo_service = None
+vapi_service = get_vapi_service()
+geocoding_service = GeocodingService()
 elastic_client = ElasticClient()
 supabase_client = SupabaseClient()
 # arize_logger = ArizeLogger()  # Placeholder
@@ -132,18 +139,6 @@ class ConfirmPricingRequest(BaseModel):
     listing_id: str
     pricing: Dict[str, Any]  # Pricing data (can be AI-suggested or manual)
     availability: List[Dict[str, str]]
-
-class SpectaclesDetectRequest(BaseModel):
-    image_base64: str  # Base64 encoded JPEG image
-    session_id: Optional[str] = None  # Optional session tracking
-    timestamp: Optional[str] = None  # Capture timestamp
-
-class SpectaclesScanSessionRequest(BaseModel):
-    user_id: Optional[str] = None
-    property_address: Optional[str] = None
-
-class SpectaclesFinalizeRequest(BaseModel):
-    session_id: str
 
 
 # ============================================================================
@@ -258,12 +253,16 @@ async def conversational_search(request: ConversationRequest):
 @app.post("/api/search/execute")
 async def execute_search(request: SearchExecuteRequest):
     """
-    🔍 NEW: Execute search with relevance threshold
+    🔍 NEW: Execute search with dynamic geo-radius
 
-    Sponsors: Elastic (vector search), Anthropic (ranking)
+    Sponsors: Google Maps (geocoding), Elastic (geo_distance + vector search), Anthropic (ranking)
 
-    Only returns listings above relevance threshold (default 0.8).
-    Uses hybrid search (BM25 + semantic vectors).
+    Features:
+    - Converts location string to coordinates using Google Maps API
+    - Dynamically adjusts radius based on location type (city vs neighborhood)
+    - Filters by actual geographic distance
+    - Auto-expands radius if too few results
+    - Returns listings with distance in miles
     """
     try:
         params = request.extracted_params
@@ -289,15 +288,39 @@ async def execute_search(request: SearchExecuteRequest):
             filters["bedrooms"] = params["bedrooms"]
         if params.get("amenities"):
             filters["amenities"] = params["amenities"]
-        if params.get("location"):
-            filters["location"] = params["location"]
 
-        # Use hybrid search for better results
-        listings = await elastic_client.hybrid_search(
-            query_text=query_text,
-            filters=filters,
-            limit=100  # Get more, then filter by threshold
-        )
+        # NEW: Geocode location and use geo-search
+        location_str = params.get("location", "")
+        geo_data = None
+        radius_miles = 25  # Default radius
+
+        if location_str:
+            # Geocode location to coordinates
+            geo_data = await geocoding_service.geocode(location_str)
+
+            if geo_data:
+                # Calculate dynamic radius based on location type
+                radius_miles = geocoding_service.calculate_dynamic_radius(geo_data)
+
+        # Execute search (geo-search if we have coordinates, otherwise fallback)
+        if geo_data:
+            listings = await elastic_client.geo_search(
+                query_text=query_text,
+                latitude=geo_data["lat"],
+                longitude=geo_data["lon"],
+                radius_miles=radius_miles,
+                filters=filters,
+                limit=100
+            )
+        else:
+            # Fallback to regular hybrid search
+            if params.get("location"):
+                filters["location"] = params["location"]
+            listings = await elastic_client.hybrid_search(
+                query_text=query_text,
+                filters=filters,
+                limit=100
+            )
 
         # Filter by relevance threshold
         threshold = request.relevance_threshold
@@ -305,6 +328,30 @@ async def execute_search(request: SearchExecuteRequest):
             listing for listing in listings
             if listing.get("relevance_score", 0) >= threshold
         ]
+
+        # Auto-adjust radius if too few results
+        if len(filtered_listings) < 5 and geo_data:
+            # Expand radius and try again
+            new_radius = geocoding_service.adjust_radius_based_on_results(
+                current_radius=radius_miles,
+                result_count=len(filtered_listings),
+                target_results=20
+            )
+
+            if new_radius != radius_miles:
+                radius_miles = new_radius
+                listings = await elastic_client.geo_search(
+                    query_text=query_text,
+                    latitude=geo_data["lat"],
+                    longitude=geo_data["lon"],
+                    radius_miles=radius_miles,
+                    filters=filters,
+                    limit=100
+                )
+                filtered_listings = [
+                    listing for listing in listings
+                    if listing.get("relevance_score", 0) >= threshold
+                ]
 
         # Update Letta memory
         if request.user_id:
@@ -319,7 +366,13 @@ async def execute_search(request: SearchExecuteRequest):
             "matches": filtered_listings,
             "total_matches": len(filtered_listings),
             "threshold": threshold,
-            "hardcoded_radius_miles": 25  # TODO: Implement Maps API radius
+            "radius_miles": radius_miles,  # UPDATED: Dynamic radius
+            "center_coordinates": {
+                "lat": geo_data["lat"],
+                "lon": geo_data["lon"]
+            } if geo_data else None,
+            "location_display": geo_data["display_name"] if geo_data else location_str,
+            "using_geocoding": geo_data is not None
         }
 
     except Exception as e:
@@ -690,8 +743,8 @@ async def optimize_listing(request: ListingOptimizeRequest):
         listing_data["qa_pairs"] = qa_pairs
         listing = await supabase_client.create_listing(listing_data)
 
-        # Step 7: Index in Elastic for semantic search
-        await elastic_client.index_listing(listing)
+        # Step 7: Index in Elastic for semantic search (with geocoding)
+        await elastic_client.index_listing(listing, geocoding_service=geocoding_service)
 
         return {
             "success": True,
@@ -837,8 +890,8 @@ async def publish_listing(request: ConfirmPricingRequest):
         # Save to Supabase (would update in real implementation)
         # await supabase_client.update_listing(request.listing_id, listing)
 
-        # Index in Elasticsearch for searchability
-        await elastic_client.index_listing(listing)
+        # Index in Elasticsearch for searchability (with geocoding)
+        await elastic_client.index_listing(listing, geocoding_service=geocoding_service)
 
         return {
             "success": True,
@@ -891,294 +944,6 @@ async def get_ar_data(listing_id: str):
     }
 
     return ar_data
-
-
-@app.post("/api/listings/{listing_id}/start-tour")
-async def start_virtual_tour(
-    listing_id: str,
-    host_name: str = "Host",
-    guest_name: str = "Guest",
-    use_spectacles: bool = False
-):
-    """
-    🎥 Start live virtual tour with LiveKit
-
-    Sponsors: LiveKit, Snap (if using Spectacles)
-
-    Two modes:
-    1. Regular video tour (host uses phone/webcam)
-    2. Spectacles tour (host wears Snap Spectacles for POV)
-
-    Connect guest with host for real-time video tour
-    """
-    try:
-        # Get listing data
-        listing = await supabase_client.get_listing(listing_id)
-
-        # Create LiveKit room
-        room_data = await livekit_service.create_tour_room(
-            listing_id=listing_id,
-            host_name=host_name,
-            guest_name=guest_name
-        )
-
-        # If using Spectacles, include AR overlay data
-        if use_spectacles:
-            ar_data = await vision_service.generate_ar_layout(
-                listing.get("photos", [])
-            )
-            room_data["ar_overlays"] = ar_data
-            room_data["mode"] = "spectacles_pov"
-        else:
-            room_data["mode"] = "standard_video"
-
-        return {
-            **room_data,
-            "listing_title": listing.get("title", "Property"),
-            "instructions": {
-                "host": "Use your device camera or Snap Spectacles to give the tour",
-                "guest": "You'll see the tour in real-time with AR annotations" if use_spectacles else "Watch the live tour"
-            }
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/listings/{listing_id}/start-ai-tour")
-async def start_ai_tour(listing_id: str):
-    """
-    🤖 Start AI-powered virtual tour
-
-    Sponsors: LiveKit, Anthropic (Claude Vision), Groq
-
-    Creates an AI tour guide that:
-    - Narrates through property photos/video
-    - Answers questions in real-time
-    - Available 24/7 (no human host needed)
-
-    This is the "MOST COMPLEX" LiveKit feature:
-    - Real-time video analysis
-    - Voice synthesis
-    - Contextual AI responses
-    """
-    try:
-        # Get listing data
-        listing = await supabase_client.get_listing(listing_id)
-
-        # Create AI tour guide
-        ai_guide = await livekit_service.create_ai_tour_guide(
-            listing_id=listing_id,
-            listing_data=listing
-        )
-
-        return {
-            "success": True,
-            "guide_id": ai_guide["guide_id"],
-            "room_token": ai_guide["room_token"],
-            "tour_script": ai_guide["tour_script"],
-            "capabilities": ai_guide["capabilities"],
-            "listing_title": listing.get("title", "Property"),
-            "note": "AI guide ready. Join room to start automated tour."
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-spectacles_sessions = {} # local host for now migrate to supabase later
-
-@app.post("/api/spectacles/scan-session")
-async def start_scan_session(request: SpectaclesScanSessionRequest):
-    try:
-        session_id = str(uuid.uuid4())
-
-        spectacles_sessions[session_id] = {
-            "session_id": session_id,
-            "user_id": request.user_id or "guest",
-            "property_address": request.property_address,
-            "created_at": datetime.utcnow().isoformat(),
-            "captures": [],  # Store all captured images
-            "detections": [],  # Store all detection results
-            "status": "active"
-        }
-
-        return {
-            "success": True,
-            "session_id": session_id,
-            "message": "Scan session started. Begin capturing frames."
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/spectacles/detect")
-async def detect_objects_spectacles(request: SpectaclesDetectRequest):
-    try:
-        if not yolo_service:
-            raise HTTPException(
-                status_code=503,
-                detail="YOLO service unavailable. Install ultralytics: pip install ultralytics"
-            )
-
-        # Decode base64 image
-        try:
-            image_bytes = base64.b64decode(request.image_base64)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid base64 image: {str(e)}")
-
-        # Run YOLO detection
-        result = await yolo_service.detect_amenities_from_image(
-            image_data=image_bytes,
-            image_format="jpeg"
-        )
-
-        if not result["success"]:
-            raise HTTPException(status_code=500, detail=result.get("error", "Detection failed"))
-
-        # Store in session if session_id provided
-        if request.session_id and request.session_id in spectacles_sessions:
-            session = spectacles_sessions[request.session_id]
-            session["captures"].append({
-                "timestamp": request.timestamp or datetime.utcnow().isoformat(),
-                "image_size": result["image_size"],
-                "detections": result["detections"],
-                "quality_score": result["quality_score"]
-            })
-            session["detections"].append(result)
-
-        # Format response for AR overlay rendering
-        # Include bbox coordinates for Lens Studio to draw AR labels
-        ar_objects = []
-        for detection in result["detections"]:
-            ar_objects.append({
-                "object": detection["object"],
-                "confidence": detection["confidence"],
-                "bbox": detection["bbox"],  # [x1, y1, x2, y2]
-                "relative_size": detection["relative_size"]
-            })
-
-        # Return detected amenities for user feedback
-        amenities_detected = list(set(result["amenities"]))[:10]  # Top 10 unique amenities for listing description, pass through LLM.
-
-        return {
-            "success": True,
-            "timestamp": request.timestamp or datetime.utcnow().isoformat(),
-            "objects": ar_objects,  # For AR overlay rendering
-            "amenities": amenities_detected,  # For display/feedback
-            "room_type": result["room_analysis"]["room_type"],
-            "room_confidence": result["room_analysis"]["confidence"],
-            "quality_score": result["quality_score"],
-            "total_objects": result["total_objects"],
-            "image_size": result["image_size"]
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/spectacles/finalize")
-async def finalize_scan_session(request: SpectaclesFinalizeRequest):
-    try:
-        if request.session_id not in spectacles_sessions:
-            raise HTTPException(status_code=404, detail="Session not found")
-
-        session = spectacles_sessions[request.session_id]
-
-        if session["status"] != "active":
-            raise HTTPException(status_code=400, detail="Session already finalized")
-
-        if not yolo_service:
-            raise HTTPException(status_code=503, detail="YOLO service unavailable")
-
-        # Get all captured images (we stored detection results, not raw images)
-        all_detections = session["detections"]
-
-        if not all_detections:
-            raise HTTPException(status_code=400, detail="No captures in this session")
-
-        # Aggregate results across all captures
-        all_amenities = set()
-        all_objects = []
-        room_types = []
-        quality_scores = []
-
-        for detection in all_detections:
-            all_amenities.update(detection["amenities"])
-            all_objects.extend(detection["detected_objects"])
-            room_types.append(detection["room_analysis"]["room_type"])
-            quality_scores.append(detection["quality_score"])
-
-        # Calculate room counts (simplified - count unique room type occurrences)
-        from collections import Counter
-        room_counts = Counter(room_types)
-
-        rooms = {
-            "bedrooms": room_counts.get("bedroom", 0),
-            "bathrooms": room_counts.get("bathroom", 0),
-            "has_kitchen": room_counts.get("kitchen", 0) > 0,
-            "has_living_room": room_counts.get("living_room", 0) > 0,
-            "has_dining_room": room_counts.get("dining_room", 0) > 0,
-            "total_rooms": len(room_counts)
-        }
-
-        # Average quality score
-        avg_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 50
-
-        # Infer property type
-        if rooms["bedrooms"] >= 3:
-            property_type = "Entire house"
-        elif rooms["bedrooms"] >= 2:
-            property_type = "Entire apartment"
-        elif rooms["bedrooms"] == 1:
-            property_type = "Studio apartment" if rooms["has_kitchen"] else "Private room"
-        else:
-            property_type = "Room"
-
-        # Update session
-        session["status"] = "completed"
-        session["completed_at"] = datetime.utcnow().isoformat()
-        session["final_analysis"] = {
-            "amenities": sorted(list(all_amenities)),
-            "rooms": rooms,
-            "property_type": property_type,
-            "quality_score": round(avg_quality, 1),
-            "total_captures": len(all_detections),
-            "unique_objects": len(set(all_objects))
-        }
-
-        return {
-            "success": True,
-            "session_id": request.session_id,
-            "analysis": session["final_analysis"],
-            "message": f"Scan complete! Processed {len(all_detections)} captures.",
-            "next_step": "Use this data to generate listing via /api/seller/chat"
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ============================================================================
-# BLOCKCHAIN - REVIEWS & REPUTATION
-# ============================================================================
-
-@app.post("/api/reviews/submit")
-async def submit_review(listing_id: str, review: Dict[str, Any]):
-    """
-    ⛓️ Submit review to Sui blockchain
-
-    Sponsors: Sui
-
-    Immutable, tamper-proof reviews
-    """
-    # TODO: Implement Sui smart contract interaction
-    return {"success": True, "tx_hash": "0x..."}
 
 
 # ============================================================================
@@ -1361,6 +1126,59 @@ async def vapi_get_listing_context(listing_id: str):
 # MONITORING & HEALTH
 # ============================================================================
 
+# ============================================================================
+# 🎙️ VAPI VOICE AI ENDPOINTS
+# ============================================================================
+
+@app.get("/api/vapi/assistant")
+async def get_vapi_assistant():
+    """
+    🎙️ Get Vapi assistant configuration
+
+    Sponsor: Vapi
+
+    Returns assistant config for frontend Web SDK
+    """
+    try:
+        config = vapi_service.create_assistant()
+        return {
+            "success": True,
+            "assistant": config
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/vapi/webhook")
+async def vapi_webhook(request: Dict[str, Any]):
+    """
+    🎙️ Webhook for Vapi voice calls
+
+    Sponsor: Vapi
+
+    Handles events from Vapi during voice conversations:
+    - assistant-request: Vapi requesting assistant config
+    - function-call: Execute function from voice command
+    - transcript: Speech transcription
+    - end-of-call-report: Call summary
+    """
+    try:
+        event_type = request.get("message", {}).get("type", "")
+        message = request.get("message", {})
+
+        response = await vapi_service.handle_webhook(
+            event_type=event_type,
+            message=message,
+            user_id=request.get("call", {}).get("customer", {}).get("number", "voice-user")
+        )
+
+        return response
+
+    except Exception as e:
+        print(f"Vapi webhook error: {e}")
+        return {"error": str(e)}
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -1373,7 +1191,7 @@ async def health_check():
             "qa": await qa_service.health(),
             "pricing": await pricing_service.health(),
             "voice": await voice_service.health(),
-            "livekit": await livekit_service.health()
+            "vapi": await vapi_service.health()
         }
     }
 

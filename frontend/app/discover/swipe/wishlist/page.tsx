@@ -4,111 +4,69 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Menu, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
-
-// TODO: Replace with actual wishlist data from backend/API
-const WISHLIST_LISTINGS = [
-  {
-    id: 1,
-    title: 'Golden Gateway Penthouse',
-    images: [
-      '/images/golden-gateway/golden-gateway1.avif',
-      '/images/golden-gateway/golden-gateway2.avif',
-      '/images/golden-gateway/golden-gateway3.avif',
-    ],
-    price: 450,
-    location: 'San Francisco, CA',
-    availability: 'Available Dec 20-27',
-    beds: 2,
-    baths: 2,
-  },
-  {
-    id: 2,
-    title: 'Moroccan Dream Home',
-    images: [
-      '/images/morrocan-home/morrocan-home1.avif',
-      '/images/morrocan-home/morrocan-home2.avif',
-      '/images/morrocan-home/morrocan-home3.avif',
-    ],
-    price: 320,
-    location: 'Palm Springs, CA',
-    availability: 'Available Jan 5-12',
-    beds: 3,
-    baths: 2,
-  },
-  {
-    id: 3,
-    title: 'Ritzy Modern Suite',
-    images: [
-      '/images/ritzy-room/ritzy-room1.avif',
-      '/images/ritzy-room/ritzy-room2.avif',
-      '/images/ritzy-room/ritzy-room3.avif',
-    ],
-    price: 280,
-    location: 'Los Angeles, CA',
-    availability: 'Available Dec 15-22',
-    beds: 1,
-    baths: 1,
-  },
-  {
-    id: 4,
-    title: 'Victorian Home Retreat',
-    images: [
-      '/images/victorian-home/victorian_home1.avif',
-      '/images/victorian-home/victorian_home2.avif',
-      '/images/victorian-home/victorian_home3.avif',
-    ],
-    price: 380,
-    location: 'San Francisco, CA',
-    availability: 'Available Jan 10-17',
-    beds: 2,
-    baths: 1,
-  },
-  {
-    id: 5,
-    title: 'Ocean Beach Escape',
-    images: [
-      '/images/peaceful-private-room-B-3-min-walk-to-ocean-beach/ocean_beach_1.avif',
-      '/images/peaceful-private-room-B-3-min-walk-to-ocean-beach/ocean_beach_2.avif',
-    ],
-    price: 220,
-    location: 'San Diego, CA',
-    availability: 'Available Dec 28-Jan 4',
-    beds: 1,
-    baths: 1,
-  },
-  {
-    id: 6,
-    title: 'West LA Classic Room',
-    images: [
-      '/images/classic-private-room-in-west-LA/west_la_1.avif',
-    ],
-    price: 180,
-    location: 'Los Angeles, CA',
-    availability: 'Available Year Round',
-    beds: 1,
-    baths: 1,
-  },
-];
+import { api } from '../../../../lib/api';
 
 export default function WishlistPage() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [wishlistListings, setWishlistListings] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
 
+  // Load saved listings from backend
+  useEffect(() => {
+    const loadWishlist = async () => {
+      try {
+        // Get user ID from localStorage (set during swipe session)
+        const userId = localStorage.getItem('vibe_user_id') || 'demo-user-' + Math.random().toString(36).substr(2, 9);
+
+        console.log('Loading wishlist for user:', userId);
+        const response = await api.getSavedListings(userId);
+
+        if (response.success && response.saved_listings) {
+          // Transform backend format to UI format
+          const transformed = response.saved_listings.map((listing: any) => ({
+            id: listing.id || listing.listing_id,
+            title: listing.title || listing.name || 'Untitled Listing',
+            images: listing.photos || listing.images || ['/images/golden-gateway/golden-gateway1.avif'],
+            price: listing.price || 0,
+            location: listing.location || 'Unknown',
+            availability: 'Available Now',
+            beds: listing.bedrooms || listing.beds || 1,
+            baths: listing.bathrooms || listing.baths || 1,
+          }));
+
+          setWishlistListings(transformed);
+          console.log(`Loaded ${transformed.length} saved listings`);
+        } else {
+          setWishlistListings([]);
+          console.log('No saved listings found');
+        }
+      } catch (error) {
+        console.error('Error loading wishlist:', error);
+        setWishlistListings([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadWishlist();
+  }, []);
+
   const goToPrevious = () => {
-    setCurrentIndex((prev) => (prev === 0 ? WISHLIST_LISTINGS.length - 1 : prev - 1));
+    setCurrentIndex((prev) => (prev === 0 ? wishlistListings.length - 1 : prev - 1));
   };
 
   const goToNext = () => {
-    setCurrentIndex((prev) => (prev === WISHLIST_LISTINGS.length - 1 ? 0 : prev + 1));
+    setCurrentIndex((prev) => (prev === wishlistListings.length - 1 ? 0 : prev + 1));
   };
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (sidebarOpen) return; // Don't navigate when sidebar is open
+      if (sidebarOpen || wishlistListings.length === 0) return;
 
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
@@ -118,13 +76,13 @@ export default function WishlistPage() {
         goToNext();
       } else if (event.key === 'Enter') {
         event.preventDefault();
-        router.push(`/listing/${WISHLIST_LISTINGS[currentIndex].id}`);
+        router.push(`/listing/${wishlistListings[currentIndex].id}`);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, sidebarOpen]);
+  }, [currentIndex, sidebarOpen, wishlistListings]);
 
   // Touch/Swipe gesture handling
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -156,9 +114,59 @@ export default function WishlistPage() {
     touchEndX.current = 0;
   };
 
-  const currentListing = WISHLIST_LISTINGS[currentIndex];
-  const previousIndex = currentIndex === 0 ? WISHLIST_LISTINGS.length - 1 : currentIndex - 1;
-  const nextIndex = currentIndex === WISHLIST_LISTINGS.length - 1 ? 0 : currentIndex + 1;
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#DFDFD3] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-stone-300 border-t-stone-900 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-stone-600 text-lg">Loading your wishlist...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show empty state
+  if (wishlistListings.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#DFDFD3] relative">
+        {/* Header */}
+        <div className="pt-6 px-6 flex items-center justify-between mb-6">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="p-2 text-stone-900 hover:bg-stone-300 rounded-full transition-colors"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Empty state message */}
+        <div className="flex flex-col items-center justify-center px-6" style={{ minHeight: 'calc(100vh - 120px)' }}>
+          <div className="text-center max-w-md">
+            <h1 className="text-4xl font-melodrame italic text-stone-900 mb-4">
+              Wishlist
+            </h1>
+            <p className="text-stone-600 font-hind text-lg mb-6">
+              You haven't saved any places yet. Start swiping to find your perfect stay!
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push('/discover/swipe')}
+              className="bg-stone-900 text-white px-8 py-3 rounded-full font-semibold hover:bg-stone-800 transition-colors"
+            >
+              Start Swiping
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const currentListing = wishlistListings[currentIndex];
+  const previousIndex = currentIndex === 0 ? wishlistListings.length - 1 : currentIndex - 1;
+  const nextIndex = currentIndex === wishlistListings.length - 1 ? 0 : currentIndex + 1;
 
   return (
     <div className="min-h-screen bg-[#DFDFD3] relative overflow-hidden">
@@ -195,7 +203,7 @@ export default function WishlistPage() {
           Wishlist
         </h1>
         <p className="text-stone-600 font-hind text-sm">
-          {WISHLIST_LISTINGS.length} saved {WISHLIST_LISTINGS.length === 1 ? 'place' : 'places'}
+          {wishlistListings.length} saved {wishlistListings.length === 1 ? 'place' : 'places'}
         </p>
       </div>
 
@@ -220,9 +228,10 @@ export default function WishlistPage() {
         >
           <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-2xl">
             <Image
-              src={WISHLIST_LISTINGS[previousIndex === 0 ? WISHLIST_LISTINGS.length - 1 : previousIndex - 1].images[0]}
+              src={wishlistListings[previousIndex === 0 ? wishlistListings.length - 1 : previousIndex - 1].images[0]}
               alt="Previous listing"
               fill
+              sizes="(max-width: 768px) 100vw, 50vw"
               className="object-cover"
             />
             <div className="absolute inset-0 bg-black/50" />
@@ -243,9 +252,10 @@ export default function WishlistPage() {
         >
           <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-2xl">
             <Image
-              src={WISHLIST_LISTINGS[previousIndex].images[0]}
-              alt={WISHLIST_LISTINGS[previousIndex].title}
+              src={wishlistListings[previousIndex].images[0]}
+              alt={wishlistListings[previousIndex].title}
               fill
+              sizes="(max-width: 768px) 100vw, 50vw"
               className="object-cover"
             />
             <div className="absolute inset-0 bg-black/30" />
@@ -270,6 +280,7 @@ export default function WishlistPage() {
                 src={currentListing.images[0]}
                 alt={currentListing.title}
                 fill
+                sizes="(max-width: 768px) 100vw, 50vw"
                 className="object-cover"
                 priority
               />
@@ -385,9 +396,10 @@ export default function WishlistPage() {
         >
           <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-2xl">
             <Image
-              src={WISHLIST_LISTINGS[nextIndex].images[0]}
-              alt={WISHLIST_LISTINGS[nextIndex].title}
+              src={wishlistListings[nextIndex].images[0]}
+              alt={wishlistListings[nextIndex].title}
               fill
+              sizes="(max-width: 768px) 100vw, 50vw"
               className="object-cover"
             />
             <div className="absolute inset-0 bg-black/30" />
@@ -408,9 +420,10 @@ export default function WishlistPage() {
         >
           <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-2xl">
             <Image
-              src={WISHLIST_LISTINGS[nextIndex === WISHLIST_LISTINGS.length - 1 ? 0 : nextIndex + 1].images[0]}
+              src={wishlistListings[nextIndex === wishlistListings.length - 1 ? 0 : nextIndex + 1].images[0]}
               alt="Next listing"
               fill
+              sizes="(max-width: 768px) 100vw, 50vw"
               className="object-cover"
             />
             <div className="absolute inset-0 bg-black/50" />
@@ -439,7 +452,7 @@ export default function WishlistPage() {
 
       {/* Carousel Indicators */}
       <div className="flex justify-center gap-2 mt-8 px-6 relative z-30">
-        {WISHLIST_LISTINGS.map((_, index) => (
+        {wishlistListings.map((_, index) => (
           <button
             key={index}
             type="button"
@@ -457,7 +470,7 @@ export default function WishlistPage() {
       {/* Counter and Keyboard Hint */}
       <div className="text-center mt-4 px-6 relative z-30">
         <p className="text-stone-600 font-hind text-sm mb-2">
-          {currentIndex + 1} of {WISHLIST_LISTINGS.length}
+          {currentIndex + 1} of {wishlistListings.length}
         </p>
         <p className="text-stone-500 font-hind text-xs">
           Use ← → arrow keys or swipe to navigate

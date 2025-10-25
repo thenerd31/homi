@@ -1,42 +1,44 @@
 # Core Framework
-fastapi
-uvicorn[standard]
-python-multipart
-pydantic
-pydantic-settings
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+pydantic==2.5.3
+pydantic-settings==2.1.0
 
 # AI & ML
-anthropic
-groq
-letta
-openai
+anthropic>=0.49.0
+groq>=0.4.2
+letta>=0.13.0
+openai>=1.12.0
 
 # Fetch.ai Agents
-uagents
-cosmpy
+uagents==0.12.0
+cosmpy==0.9.0
 
 # Vector Search & Database
-elasticsearch
-supabase
-psycopg2-binary
+elasticsearch==8.12.0
+supabase==2.3.4
+psycopg2-binary==2.9.9
 
 # Tool Management
-toolhouse
+toolhouse==1.4.0
 
 # Voice
-requests
+requests==2.31.0
 
 # Observability
-arize-phoenix
-opentelemetry-api
-opentelemetry-sdk
+arize-phoenix==3.0.0
+openinference-instrumentation-anthropic
+opentelemetry-api==1.22.0
+opentelemetry-sdk==1.22.0
 
 # Image Processing
-pillow
-opencv-python
-ultralytics  # YOLOv8 for Spectacles object detection
+pillow==10.2.0
+opencv-python==4.9.0.80
+ultralytics>=8.0.0
+numpy>=1.24.0
 
 # Utilities
-python-dotenv
-httpx
-aiohttp
+python-dotenv==1.0.0
+httpx==0.26.0
+aiohttp==3.9.3  # HTTP client for geocoding service

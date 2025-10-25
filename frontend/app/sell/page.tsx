@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Menu, X, Glasses, ScanLine, Heart } from 'lucide-react';
-import StarIcon from "@mui/icons-material/Star";
+import { Menu, X, Glasses, ScanLine, Heart, Star } from 'lucide-react';
 import Image from 'next/image';
 
 // TODO: change hardcoded data
@@ -166,8 +165,8 @@ export default function SellPage() {
                   {listing.guests} guests, {listing.bedrooms} bedroom{listing.bedrooms > 1 ? 's' : ''}, {listing.bathrooms} bath{listing.bathrooms > 1 ? 's' : ''}
                 </p>
                 <div className="flex items-center gap-1">
-                  <span className="text-white text-sm font-semibold"></span>
-                  <span className="text-white text-sm font-semibold">{listing.rating} <StarIcon sx={{ fontSize: "0.85em", color: "#facc15", verticalAlign: "middle" }} /> </span>
+                  <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                  <span className="text-white text-sm font-semibold">{listing.rating}</span>
                 </div>
               </div>
             </div>

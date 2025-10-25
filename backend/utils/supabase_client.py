@@ -24,9 +24,18 @@ class SupabaseClient:
         else:
             self.client = None
 
-        # In-memory fallback
-        self.mock_listings = {}
+        # In-memory fallback - load mock listings
+        self.mock_listings = self._load_mock_listings()
         self.mock_qa_pairs = {}
+
+    def _load_mock_listings(self) -> Dict[str, Dict[str, Any]]:
+        """Load mock listings from generate_mock_listings.py"""
+        try:
+            from generate_mock_listings import LISTINGS
+            return {listing["id"]: listing for listing in LISTINGS}
+        except ImportError:
+            # If import fails, return empty dict
+            return {}
 
     async def create_listing(self, listing_data: Dict[str, Any]) -> Dict[str, Any]:
         """
