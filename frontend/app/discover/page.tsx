@@ -130,6 +130,18 @@ export default function DiscoverPage() {
               <button
                 type="button"
                 onClick={() => {
+                  router.push('/discover/swipe/wishlist');
+                  setSidebarOpen(false);
+                }}
+                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 hover:bg-black/10 transition-all px-4 py-2 rounded-lg w-full text-left"
+              >
+                Wishlist
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => {
                   router.push('/map');
                   setSidebarOpen(false);
                 }}
