@@ -185,6 +185,44 @@ Two voice modes (see `backend/VOICE_INTEGRATION.md`):
 1. **Groq Whisper** - Audio file transcription for search input
 2. **Vapi** - Real-time voice conversations for Q&A
 
+### Snap Spectacles Integration
+
+The platform includes a complete Lens Studio implementation for Snap Spectacles that enables hands-free property scanning with real-time YOLO object detection.
+
+**Location**: `lens-studio/vibe-property-scanner/`
+
+**Key Components**:
+- **TypeScript Scripts**: 6 scripts for camera capture, networking, AR rendering, and UI
+- **Real-time Detection**: Auto-captures frames every 2s and sends to backend YOLO API
+- **AR Overlays**: Displays 3D bounding boxes and text labels for detected objects
+- **Session Management**: Tracks entire scanning session with progress feedback
+
+**Backend Endpoints for Spectacles**:
+- `POST /api/spectacles/scan-session` - Start new scan session, returns session_id
+- `POST /api/spectacles/detect` - Send base64 image for YOLO detection, returns objects with bounding boxes
+- `POST /api/spectacles/finalize` - Finalize session and get complete property analysis
+
+**Setup Requirements**:
+1. Backend must run with `--host 0.0.0.0` to accept network requests
+2. Spectacles and computer must be on same WiFi network
+3. Update `Config.ts` with local IP address (e.g., `http://192.168.1.5:8000`)
+4. Install `ultralytics` for YOLO: `pip install ultralytics`
+
+**Detection Flow**:
+```
+Spectacles Camera → Capture (2s intervals) → Base64 JPEG →
+NetworkManager → Backend YOLO → Detections →
+AROverlayRenderer → 3D Boxes + Labels in AR space
+```
+
+**See**: `lens-studio/vibe-property-scanner/SETUP.md` for complete setup instructions
+
+**Testing Standalone YOLO**:
+```bash
+cd backend
+python test_yolo_standalone.py 'https://url-to-airbnb-image.jpg'
+```
+
 ## Code Style
 
 - Backend: Python with FastAPI, type hints (Pydantic models), snake_case

@@ -23,9 +23,9 @@ import json
 
 qa_agent = Agent(
     name="vibe_qa_agent",
-    port=8003,
+    port=8103,
     seed="vibe_qa_secret_phrase",
-    endpoint=["http://localhost:8003/submit"],
+    endpoint=["http://localhost:8103/submit"],
 )
 
 fund_agent_if_low(qa_agent.wallet.address())

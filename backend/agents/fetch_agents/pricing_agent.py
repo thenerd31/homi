@@ -13,9 +13,9 @@ import json
 
 pricing_agent = Agent(
     name="vibe_pricing_agent",
-    port=8002,
+    port=8102,
     seed="vibe_pricing_secret_phrase",
-    endpoint=["http://localhost:8002/submit"],
+    endpoint=["http://localhost:8102/submit"],
 )
 
 fund_agent_if_low(pricing_agent.wallet.address())

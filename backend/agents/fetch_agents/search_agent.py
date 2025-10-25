@@ -20,9 +20,9 @@ import json
 # Initialize agent
 search_agent = Agent(
     name="vibe_search_agent",
-    port=8001,
+    port=8101,
     seed="vibe_search_secret_phrase",  # Change in production
-    endpoint=["http://localhost:8001/submit"],
+    endpoint=["http://localhost:8101/submit"],
 )
 
 # Fund agent if needed (testnet)

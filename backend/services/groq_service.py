@@ -146,3 +146,21 @@ Make it exciting and highlight the best parts. Be conversational."""
         )
 
         return response.choices[0].message.content
+
+    async def generate_completion(
+        self,
+        prompt: str,
+        temperature: float = 0.7,
+        max_tokens: int = 500
+    ) -> str:
+        """
+        General-purpose completion generation
+        """
+        response = self.client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=self.model,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+
+        return response.choices[0].message.content
