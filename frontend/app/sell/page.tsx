@@ -121,6 +121,7 @@ export default function SellPage() {
       </div>
 
       {/* listings */}
+      {/* TODO: empty listing? cool to demo making a new listing using glasses */}
       <div className="px-6 pb-24">
         <h2 className="text-3xl font-melodrame italic text-white mb-6">
           Your Listings
