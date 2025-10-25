@@ -189,8 +189,18 @@ class LettaService:
 
     async def health(self) -> bool:
         """Health check"""
+        # Check if API key is configured
+        if not self.api_key:
+            return True  # In-memory mode always available
+
         try:
-            response = await self.client.get("/health")
-            return response.status_code == 200
+            async with httpx.AsyncClient() as client:
+                # Letta health endpoint: GET /v1/health/
+                response = await client.get(
+                    f"{self.base_url}/v1/health/",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    timeout=5.0
+                )
+                return response.status_code == 200
         except:
             return True  # In-memory fallback always works
