@@ -12,7 +12,7 @@ export default function TextInputPage() {
     if (inputText.trim()) {
       // TODO: Handle text submission
       console.log('Submitted:', inputText);
-      router.push('/discover');
+      router.push('/discover/swipe');
     }
   };
 

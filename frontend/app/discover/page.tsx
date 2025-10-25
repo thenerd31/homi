@@ -15,9 +15,9 @@ export default function DiscoverPage() {
         </h1>
       </div>
 
-      {/* listing card */}
+      {/* listing placeholder card */}
       <div className="flex-1 flex items-center justify-center px-6 pb-20">
-        <div className="w-full max-w-md aspect-[9/16] bg-gradient-to-b from-stone-400 to-stone-200 rounded-3xl shadow-2xl flex flex-col items-center justify-between p-8">
+        <div className="w-full max-w-md aspect-[8/16] bg-gradient-to-b from-stone-400 to-stone-200 rounded-3xl shadow-2xl flex flex-col items-center justify-between p-8">
           <div className="flex-1 flex items-end pb-12">
             <div className="text-white">
               <p className="text-lg mb-2 font-hind font-regular">Welcome!</p>

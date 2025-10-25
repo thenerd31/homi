@@ -94,6 +94,29 @@ export default function VoiceInputPage() {
             <div className="w-64 h-64 rounded-full bg-white/20 animate-ping"></div>
           </div>
         )}
+
+        {/* Microphone Button - Center Lower */}
+        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-10">
+          <button
+            type="button"
+            onClick={handleMicClick}
+            className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl ${
+              isRecording
+                ? 'bg-red-500 hover:bg-red-600 animate-pulse scale-110'
+                : 'bg-white/20 hover:bg-white/30 backdrop-blur-xl border border-white/30'
+            }`}
+            aria-label={isRecording ? "Stop recording" : "Start recording"}
+          >
+            <Mic className={`w-10 h-10 ${isRecording ? 'text-white' : 'text-white'}`} strokeWidth={2} />
+          </button>
+
+          {/* Recording text */}
+          {isRecording && (
+            <p className="text-white text-sm text-center mt-4 animate-pulse">
+              Recording...
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
