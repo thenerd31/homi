@@ -11,15 +11,15 @@ import os
 from dotenv import load_dotenv
 
 # Import our modules
-# from services.search_service import SearchService  # Placeholder service
+from services.search_service import SearchService
 from services.vision_service import VisionService
 from services.letta_service import LettaService
 from services.groq_service import GroqService
-# from services.voice_service import VoiceService  # Placeholder service
-# Fetch.ai agents are separate processes - see agents/fetch_agents/
+from services.voice_service import VoiceService
+from agents.fetch_agents import SearchAgent, PricingAgent, QAAgent
 from utils.elastic_client import ElasticClient
 from utils.supabase_client import SupabaseClient
-# from monitoring.arize_logger import ArizeLogger  # Placeholder service
+from monitoring.arize_logger import ArizeLogger
 
 load_dotenv()
 
@@ -40,20 +40,19 @@ app.add_middleware(
 )
 
 # Initialize services
-# search_service = SearchService()  # Placeholder
+search_service = SearchService()
 vision_service = VisionService()
 letta_service = LettaService()
 groq_service = GroqService()
-# voice_service = VoiceService()  # Placeholder
+voice_service = VoiceService()
 elastic_client = ElasticClient()
 supabase_client = SupabaseClient()
-# arize_logger = ArizeLogger()  # Placeholder
+arize_logger = ArizeLogger()
 
-# Fetch.ai agents run as separate processes
-# See backend/agents/fetch_agents/ - run each agent with: python search_agent.py
-# search_agent = SearchAgent()
-# pricing_agent = PricingAgent()
-# qa_agent = QAAgent()
+# Initialize Fetch.ai agents
+search_agent = SearchAgent()
+pricing_agent = PricingAgent()
+qa_agent = QAAgent()
 
 
 # ============================================================================
@@ -97,10 +96,10 @@ async def natural_language_search(request: SearchRequest):
     """
     try:
         # Log to Arize
-        # arize_logger.log_search(request.query, request.user_id)
+        arize_logger.log_search(request.query, request.user_id)
 
         # Step 1: Use Letta to maintain user search history & preferences
-        user_context = await letta_service.get_user_context(request.user_id or "guest")
+        user_context = await letta_service.get_user_context(request.user_id)
 
         # Step 2: Extract structured filters with Groq (ultra-fast)
         filters = await groq_service.extract_search_filters(
@@ -109,26 +108,25 @@ async def natural_language_search(request: SearchRequest):
         )
 
         # Step 3: Use Fetch.ai Search Agent to coordinate search
-        # search_results = await search_agent.coordinate_search(filters)  # TODO: Implement Fetch.ai agent
+        search_results = await search_agent.coordinate_search(filters)
 
         # Step 4: Semantic search with Elastic vector DB
         listings = await elastic_client.semantic_search(
-            query_text=request.query,
+            query_vector=filters["embedding"],
             filters=filters,
             limit=50
         )
 
         # Step 5: Re-rank with Claude (complex reasoning)
-        # ranked_listings = await vision_service.rank_by_relevance(  # TODO: Implement ranking
-        #     listings=listings,
-        #     user_query=request.query,
-        #     user_preferences=user_context
-        # )
-        ranked_listings = listings  # Use unranked for now
+        ranked_listings = await vision_service.rank_by_relevance(
+            listings=listings,
+            user_query=request.query,
+            user_preferences=user_context
+        )
 
         # Step 6: Update Letta memory
         await letta_service.update_search_history(
-            user_id=request.user_id or "guest",
+            user_id=request.user_id,
             query=request.query,
             filters=filters
         )
@@ -141,7 +139,7 @@ async def natural_language_search(request: SearchRequest):
         }
 
     except Exception as e:
-        # arize_logger.log_error("search", str(e))
+        arize_logger.log_error("search", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -156,18 +154,15 @@ async def voice_search(audio_file: UploadFile = File(...)):
     """
     try:
         # Transcribe with Vapi
-        # transcription = await voice_service.transcribe(audio_file)  # TODO: Implement voice service
-
-        # Placeholder: return error for now
-        raise HTTPException(status_code=501, detail="Voice search not yet implemented")
+        transcription = await voice_service.transcribe(audio_file)
 
         # Use same search logic
-        # return await natural_language_search(
-        #     SearchRequest(
-        #         query=transcription,
-        #         voice_mode=True
-        #     )
-        # )
+        return await natural_language_search(
+            SearchRequest(
+                query=transcription,
+                voice_mode=True
+            )
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -190,18 +185,18 @@ async def handle_swipe(swipe: SwipeAction):
         )
 
         # Log engagement to Arize
-        # arize_logger.log_engagement(swipe.user_id, swipe.action)
+        arize_logger.log_engagement(swipe.user_id, swipe.action)
 
         # If user liked, get similar listings
         if swipe.action == "like":
             listing = await supabase_client.get_listing(swipe.listing_id)
-            # similar = await elastic_client.find_similar(  # TODO: Implement find_similar
-            #     listing_vector=listing["embedding"],
-            #     limit=10
-            # )
+            similar = await elastic_client.find_similar(
+                listing_vector=listing["embedding"],
+                limit=10
+            )
             return {
                 "success": True,
-                # "similar_listings": similar
+                "similar_listings": similar
             }
 
         return {"success": True}
@@ -224,13 +219,10 @@ async def ask_listing_question(listing_id: str, question: QuestionRequest):
         listing = await supabase_client.get_listing(listing_id)
 
         # Use Fetch.ai Q&A Agent
-        # answer = await qa_agent.answer_question(  # TODO: Implement Fetch.ai Q&A agent
-        #     listing_data=listing,
-        #     question=question.question
-        # )
-
-        # Placeholder answer
-        answer = f"Based on the listing details, {question.question}"
+        answer = await qa_agent.answer_question(
+            listing_data=listing,
+            question=question.question
+        )
 
         # Save Q&A pair for future reference
         await supabase_client.save_qa_pair(
@@ -241,7 +233,7 @@ async def ask_listing_question(listing_id: str, question: QuestionRequest):
 
         return {
             "answer": answer,
-            "confidence": 0.5  # Low confidence since it's a placeholder
+            "confidence": answer.get("confidence", 0.9)
         }
 
     except Exception as e:
@@ -266,15 +258,11 @@ async def optimize_listing(request: ListingOptimizeRequest):
         amenities = await vision_service.detect_amenities(request.photos)
 
         # Step 2: Use Fetch.ai Pricing Agent for competitive analysis
-        # pricing_data = await pricing_agent.analyze_pricing(  # TODO: Implement Fetch.ai pricing agent
-        #     location=request.location,
-        #     amenities=amenities,
-        #     property_type=request.property_type
-        # )
-        pricing_data = {
-            "suggested_price": 250,
-            "price_range": {"min": 200, "max": 300}
-        }
+        pricing_data = await pricing_agent.analyze_pricing(
+            location=request.location,
+            amenities=amenities,
+            property_type=request.property_type
+        )
 
         # Step 3: Generate title & description with Groq (fast)
         content = await groq_service.generate_listing_content(
@@ -283,18 +271,17 @@ async def optimize_listing(request: ListingOptimizeRequest):
         )
 
         # Step 4: Generate Q&A pairs with Fetch.ai Q&A Agent
-        # qa_pairs = await qa_agent.generate_common_questions(  # TODO: Implement Q&A generation
-        #     amenities=amenities,
-        #     description=content["description"]
-        # )
-        qa_pairs = []  # Placeholder
+        qa_pairs = await qa_agent.generate_common_questions(
+            amenities=amenities,
+            description=content["description"]
+        )
 
         # Step 5: Save to Supabase
         listing = await supabase_client.create_listing({
             "photos": request.photos,
             "amenities": amenities,
-            "title": content.get("title", "Beautiful Property"),
-            "description": content.get("description", "A wonderful place to stay"),
+            "title": content["title"],
+            "description": content["description"],
             "suggested_price": pricing_data["suggested_price"],
             "price_range": pricing_data["price_range"],
             "qa_pairs": qa_pairs,
@@ -308,8 +295,8 @@ async def optimize_listing(request: ListingOptimizeRequest):
         return {
             "success": True,
             "listing_id": listing["id"],
-            "title": content.get("title"),
-            "description": content.get("description"),
+            "title": content["title"],
+            "description": content["description"],
             "amenities_detected": amenities,
             "suggested_price": pricing_data["suggested_price"],
             "competitive_analysis": pricing_data,
@@ -338,15 +325,15 @@ async def get_ar_data(listing_id: str):
     # Generate AR metadata
     ar_data = {
         "listing_id": listing_id,
-        "title": listing.get("title", "Property"),
-        "price": listing.get("suggested_price", 0),
-        "amenities": listing.get("amenities", []),
-        # "room_layout": await vision_service.generate_ar_layout(  # TODO: Implement AR layout generation
-        #     listing["photos"]
-        # ),
-        # "overlay_positions": await vision_service.detect_feature_positions(  # TODO: Implement AR feature detection
-        #     listing["photos"]
-        # )
+        "title": listing["title"],
+        "price": listing["suggested_price"],
+        "amenities": listing["amenities"],
+        "room_layout": await vision_service.generate_ar_layout(
+            listing["photos"]
+        ),
+        "overlay_positions": await vision_service.detect_feature_positions(
+            listing["photos"]
+        )
     }
 
     return ar_data
@@ -362,12 +349,11 @@ async def start_virtual_tour(listing_id: str):
     Connect guest with host for real-time video tour
     """
     # Create LiveKit room
-    # room_token = await voice_service.create_tour_room(listing_id)  # TODO: Implement LiveKit integration
+    room_token = await voice_service.create_tour_room(listing_id)
 
     return {
-        "room_token": "placeholder_token",
-        "room_url": f"https://vibe.app/tour/{listing_id}",
-        "note": "LiveKit integration coming soon"
+        "room_token": room_token,
+        "room_url": f"https://vibe.app/tour/{listing_id}"
     }
 
 
