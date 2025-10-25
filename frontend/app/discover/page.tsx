@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Menu, X, Pencil, Mic, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 
+// TODO: add idea on top, gradient under for contrast
 export default function DiscoverPage() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
