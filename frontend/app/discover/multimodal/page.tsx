@@ -40,7 +40,7 @@ export default function MultimodalInputPage() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
-      {/* Header */}
+      {/* header */}
       <div className="flex items-center justify-center pt-4 pb-2 relative">
         <button
           type="button"
@@ -56,14 +56,14 @@ export default function MultimodalInputPage() {
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* main content */}
       <div className="flex-1 px-6 pt-8 overflow-y-auto">
         <div className="max-w-2xl mx-auto">
           <p className="text-white/60 text-base mb-6">
             Share images or files of places you love
           </p>
 
-          {/* Upload Area */}
+          {/* upload files here */}
           <div
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -90,7 +90,7 @@ export default function MultimodalInputPage() {
             />
           </div>
 
-          {/* Uploaded Files */}
+          {/* uploaded files */}
           {uploadedFiles.length > 0 && (
             <div className="mb-6">
               <h3 className="text-white text-sm font-medium mb-3">
@@ -127,7 +127,7 @@ export default function MultimodalInputPage() {
             </div>
           )}
 
-          {/* Optional Description */}
+          {/* description */}
           <div>
             <label className="text-white/60 text-sm mb-2 block">
               Add a description (optional)
@@ -142,7 +142,7 @@ export default function MultimodalInputPage() {
         </div>
       </div>
 
-      {/* Submit Button */}
+      {/* submit button */}
       {(uploadedFiles.length > 0 || description.trim()) && (
         <div className="fixed bottom-24 right-6">
           <button

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -10,6 +11,43 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// fonts
+const hind = localFont({
+  src: [
+    {
+      path: "../public/fonts/hind-light.otf",
+      weight: "300",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/hind-regular.otf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/hind-medium.otf",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/hind-semibold.otf",
+      weight: "600",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/hind-bold.otf",
+      weight: "700",
+      style: "normal",
+    },
+  ],
+  variable: "--font-hind",
+});
+
+const melodrame = localFont({
+  src: "../public/fonts/relationship-of-mélodrame.ttf",
+  variable: "--font-melodrame",
 });
 
 export const metadata: Metadata = {
@@ -25,7 +63,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${hind.variable} ${melodrame.variable} antialiased`}
       >
         {children}
       </body>
