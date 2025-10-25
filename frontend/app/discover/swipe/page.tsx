@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
+import { Menu, X } from 'lucide-react';
 import ListingCard from '../../components/ui/listing-card';
 import { api } from '../../../lib/api';
 
@@ -34,8 +36,10 @@ const SAMPLE_LISTINGS = [
 ];
 
 export default function SwipePage() {
+  const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [exitDirection, setExitDirection] = useState<'left' | 'right' | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userId] = useState('demo-user-' + Math.random().toString(36).substr(2, 9)); // Generate random user ID for demo
 
   const currentListing = SAMPLE_LISTINGS[currentIndex];
@@ -113,15 +117,18 @@ export default function SwipePage() {
   };
 
   const moveToNext = () => {
-    setExitDirection(null);
-    if (currentIndex < SAMPLE_LISTINGS.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      // No more cards
-      console.log('No more listings!');
-      setCurrentIndex(0); // Loop back for demo
-    }
-    x.set(0);
+    // Wait for exit animation to complete before changing card
+    setTimeout(() => {
+      setExitDirection(null);
+      if (currentIndex < SAMPLE_LISTINGS.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
+        // No more cards
+        console.log('No more listings!');
+        setCurrentIndex(0); // Loop back for demo
+      }
+      x.set(0);
+    }, 100);
   };
 
   const swipeLeft = () => {
@@ -165,10 +172,20 @@ export default function SwipePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#DFDFD3] flex flex-col">
+    <div className="min-h-screen bg-[#DFDFD3] flex flex-col relative">
+      {/* Hamburger Menu */}
+      <button
+        type="button"
+        onClick={() => setSidebarOpen(true)}
+        className="absolute top-6 right-6 z-30 p-2 text-stone-900 hover:bg-stone-300 rounded-full transition-colors"
+        aria-label="Open menu"
+      >
+        <Menu className="w-6 h-6" />
+      </button>
+
       {/* Header */}
-      <div className="pt-8 px-6 text-center">
-        <h1 className="text-3xl font-melodrame italic text-stone-900">
+      <div className="pt-12 px-6 text-center">
+        <h1 className="text-4xl font-melodrame italic text-stone-900 mb-4">
           Find Your Perfect Place
         </h1>
       </div>
@@ -229,6 +246,85 @@ export default function SwipePage() {
         <p className="text-stone-600 text-sm">
           {currentIndex + 1} / {SAMPLE_LISTINGS.length}
         </p>
+      </div>
+
+      {/* Dark overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div
+        className={`fixed top-0 right-0 h-full w-64 bg-[#DFDFD3] shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Close button */}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(false)}
+          className="absolute top-6 left-6 p-2 text-stone-900 hover:bg-stone-200 rounded-full transition-colors"
+          aria-label="Close menu"
+        >
+          <X className="w-6 h-6" />
+        </button>
+
+        {/* Menu items */}
+        <nav className="pt-24 px-8">
+          <ul className="space-y-8">
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push('/discover');
+                  setSidebarOpen(false);
+                }}
+                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"
+              >
+                Discover
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push('/map');
+                  setSidebarOpen(false);
+                }}
+                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"
+              >
+                Map
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push('/trips');
+                  setSidebarOpen(false);
+                }}
+                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"
+              >
+                Trips
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push('/account');
+                  setSidebarOpen(false);
+                }}
+                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"
+              >
+                Account
+              </button>
+            </li>
+          </ul>
+        </nav>
       </div>
     </div>
   );
