@@ -46,3 +46,9 @@ coverage/
 *.bak
 *.tmp
 .cache/
+
+# ML Models
+*.pt
+*.pth
+*.onnx
+*.h5
