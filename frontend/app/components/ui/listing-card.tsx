@@ -124,10 +124,10 @@ export default function ListingCard({
               e.stopPropagation();
               onPass?.();
             }}
-            className="w-16 h-16 rounded-full bg-stone-600 hover:bg-stone-700 transition-all flex items-center justify-center shadow-lg active:scale-95"
+            className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95"
             aria-label="Pass"
           >
-            <X className="w-6 h-6 text-white" />
+            <X className="w-6 h-6 text-white" strokeWidth={2} />
           </button>
 
           {/* Like Button */}
@@ -137,10 +137,10 @@ export default function ListingCard({
               e.stopPropagation();
               onLike?.();
             }}
-            className="w-20 h-20 rounded-full bg-stone-700 hover:bg-stone-800 transition-all flex items-center justify-center shadow-lg active:scale-95"
+            className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95"
             aria-label="Like"
           >
-            <Heart className="w-8 h-8 text-white" />
+            <Heart className="w-8 h-8 text-white" strokeWidth={2} />
           </button>
 
           {/* Super Like Button */}
@@ -150,10 +150,10 @@ export default function ListingCard({
               e.stopPropagation();
               onSuperLike?.();
             }}
-            className="w-16 h-16 rounded-full bg-stone-600 hover:bg-stone-700 transition-all flex items-center justify-center shadow-lg active:scale-95"
+            className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95"
             aria-label="Super Like"
           >
-            <Shuffle className="w-6 h-6 text-white" />
+            <Shuffle className="w-6 h-6 text-white" strokeWidth={2} />
           </button>
         </div>
       )}
