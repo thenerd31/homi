@@ -43,8 +43,8 @@ export default function DiscoverPage() {
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40" />
 
           {/* Content */}
-          <div className="relative h-full flex flex-col items-center justify-between p-8">
-            <div className="flex-1 flex items-end pb-12">
+          <div className="relative h-full flex flex-col items-start justify-center p-8">
+            <div className="flex-1 flex items-center">
               <div className="text-white">
                 <p className="text-lg mb-2 font-hind font-regular">Welcome!</p>
                 <h2 className="text-3xl font-semibold leading-tight">
@@ -120,7 +120,7 @@ export default function DiscoverPage() {
                   router.push('/discover');
                   setSidebarOpen(false);
                 }}
-                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"
+                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 hover:bg-black/10 transition-all px-4 py-2 rounded-lg w-full text-left"
               >
                 Discover
               </button>
@@ -132,7 +132,7 @@ export default function DiscoverPage() {
                   router.push('/map');
                   setSidebarOpen(false);
                 }}
-                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"
+                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 hover:bg-black/10 transition-all px-4 py-2 rounded-lg w-full text-left"
               >
                 Map
               </button>
@@ -144,7 +144,7 @@ export default function DiscoverPage() {
                   router.push('/trips');
                   setSidebarOpen(false);
                 }}
-                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"
+                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 hover:bg-black/10 transition-all px-4 py-2 rounded-lg w-full text-left"
               >
                 Trips
               </button>
@@ -156,7 +156,7 @@ export default function DiscoverPage() {
                   router.push('/account');
                   setSidebarOpen(false);
                 }}
-                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"
+                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 hover:bg-black/10 transition-all px-4 py-2 rounded-lg w-full text-left"
               >
                 Account
               </button>
