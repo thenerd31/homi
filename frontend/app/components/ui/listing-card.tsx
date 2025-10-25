@@ -9,7 +9,7 @@ interface ListingCardProps {
   className?: string;
   onPass?: () => void;
   onLike?: () => void;
-  onSuperLike?: () => void;
+  onShuffle?: () => void;
   showButtons?: boolean;
   price?: number;
   location?: string;
@@ -24,7 +24,7 @@ export default function ListingCard({
   className = '',
   onPass,
   onLike,
-  onSuperLike,
+  onShuffle,
   showButtons = true,
   price,
   location,
@@ -62,6 +62,7 @@ export default function ListingCard({
               src={image}
               alt={`Listing image ${index + 1}`}
               fill
+              sizes="(max-width: 768px) 100vw, 50vw"
               className="object-cover"
               priority={index === 0}
             />
@@ -153,15 +154,15 @@ export default function ListingCard({
             <Heart className="w-8 h-8 text-white" strokeWidth={2} />
           </button>
 
-          {/* Super Like Button */}
+          {/* Shuffle Button */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onSuperLike?.();
+              onShuffle?.();
             }}
             className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95 pointer-events-auto touch-none"
-            aria-label="Super Like"
+            aria-label="Shuffle"
           >
             <Shuffle className="w-6 h-6 text-white" strokeWidth={2} />
           </button>

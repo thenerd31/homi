@@ -13,7 +13,19 @@ export default function VoiceInputPage() {
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   const [extractedParams, setExtractedParams] = useState<Record<string, any>>({});
   const [isProcessing, setIsProcessing] = useState(false);
-  const [userId] = useState('demo-user-' + Math.random().toString(36).substr(2, 9));
+  const [userId] = useState(() => {
+    // Get existing user ID from localStorage or create a new one
+    if (typeof window !== 'undefined') {
+      const existingUserId = localStorage.getItem('vibe_user_id');
+      if (existingUserId) {
+        return existingUserId;
+      }
+      const newUserId = 'demo-user-' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('vibe_user_id', newUserId);
+      return newUserId;
+    }
+    return 'demo-user-' + Math.random().toString(36).substr(2, 9);
+  });
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 

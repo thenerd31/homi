@@ -11,7 +11,7 @@ import { api } from '../../../lib/api';
 // TODO: slight error
 const SAMPLE_LISTINGS = [
   {
-    id: 1,
+    id: 'listing_1',
     images: [
       '/images/golden-gateway/golden-gateway1.avif',
       '/images/golden-gateway/golden-gateway2.avif',
@@ -25,7 +25,7 @@ const SAMPLE_LISTINGS = [
     baths: 2,
   },
   {
-    id: 2,
+    id: 'listing_8',
     images: [
       '/images/morrocan-home/morrocan-home1.avif',
       '/images/morrocan-home/morrocan-home2.avif',
@@ -38,7 +38,7 @@ const SAMPLE_LISTINGS = [
     baths: 2,
   },
   {
-    id: 3,
+    id: 'listing_3',
     images: [
       '/images/ritzy-room/ritzy-room1.avif',
       '/images/ritzy-room/ritzy-room2.avif',
@@ -51,7 +51,7 @@ const SAMPLE_LISTINGS = [
     baths: 1,
   },
   {
-    id: 4,
+    id: 'listing_4',
     images: [
       '/images/victorian-home/victorian_home1.avif',
       '/images/victorian-home/victorian_home2.avif',
@@ -72,7 +72,20 @@ export default function SwipePage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [exitDirection, setExitDirection] = useState<'left' | 'right' | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [userId] = useState('demo-user-' + Math.random().toString(36).substr(2, 9));
+  const [swipedIndices, setSwipedIndices] = useState<Set<number>>(new Set());
+  const [userId] = useState(() => {
+    // Get existing user ID from localStorage or create a new one
+    if (typeof window !== 'undefined') {
+      const existingUserId = localStorage.getItem('vibe_user_id');
+      if (existingUserId) {
+        return existingUserId;
+      }
+      const newUserId = 'demo-user-' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('vibe_user_id', newUserId);
+      return newUserId;
+    }
+    return 'demo-user-' + Math.random().toString(36).substr(2, 9);
+  });
 
   const currentListing = SAMPLE_LISTINGS[currentIndex];
   const x = useMotionValue(0);
@@ -99,11 +112,14 @@ export default function SwipePage() {
   const handlePass = async () => {
     console.log('Passed listing:', currentListing.id);
 
+    // Mark this index as swiped
+    setSwipedIndices(prev => new Set(prev).add(currentIndex));
+
     // Send to backend
     try {
       await api.swipe({
         user_id: userId,
-        listing_id: `listing-${currentListing.id}`,
+        listing_id: currentListing.id,
         action: 'pass'
       });
     } catch (error) {
@@ -116,11 +132,14 @@ export default function SwipePage() {
   const handleLike = async () => {
     console.log('Liked listing:', currentListing.id);
 
+    // Mark this index as swiped
+    setSwipedIndices(prev => new Set(prev).add(currentIndex));
+
     // Send to backend
     try {
       const result = await api.swipe({
         user_id: userId,
-        listing_id: `listing-${currentListing.id}`,
+        listing_id: currentListing.id,
         action: 'like'
       });
       console.log('Saved!', result.message);
@@ -131,21 +150,27 @@ export default function SwipePage() {
     moveToNext();
   };
 
-  const handleSuperLike = async () => {
-    console.log('Super liked listing:', currentListing.id);
+  const handleShuffle = () => {
+    console.log('Shuffled listing:', currentListing.id);
 
-    // send to backend as regular like (super like = like with higher priority)
-    try {
-      await api.swipe({
-        user_id: userId,
-        listing_id: `listing-${currentListing.id}`,
-        action: 'like'
-      });
-    } catch (error) {
-      console.error('Failed to record swipe:', error);
+    // Get indices of cards that haven't been swiped yet
+    const remainingIndices = SAMPLE_LISTINGS
+      .map((_, index) => index)
+      .filter(index => !swipedIndices.has(index) && index !== currentIndex);
+
+    if (remainingIndices.length === 0) {
+      console.log('No more cards to shuffle!');
+      return;
     }
 
-    moveToNext();
+    // Pick random index from remaining cards
+    const randomIndex = remainingIndices[Math.floor(Math.random() * remainingIndices.length)];
+    setExitDirection('left');
+    setTimeout(() => {
+      setExitDirection(null);
+      setCurrentIndex(randomIndex);
+      x.set(0);
+    }, 300);
   };
 
   const moveToNext = () => {
@@ -189,7 +214,7 @@ export default function SwipePage() {
         swipeRight();
       } else if (event.key === 'ArrowUp') {
         event.preventDefault();
-        handleSuperLike();
+        handleShuffle();
       }
     };
 
@@ -259,7 +284,7 @@ export default function SwipePage() {
               images={currentListing.images}
               onPass={swipeLeft}
               onLike={swipeRight}
-              onSuperLike={handleSuperLike}
+              onShuffle={handleShuffle}
               price={currentListing.price}
               location={currentListing.location}
               availability={currentListing.availability}
