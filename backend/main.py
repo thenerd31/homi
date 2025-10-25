@@ -548,6 +548,10 @@ class PreferenceAnalysisRequest(BaseModel):
     image_urls: List[str]
     text_description: Optional[str] = ""
 
+class HumanizePreferencesRequest(BaseModel):
+    """Request to convert raw preferences to human-readable text"""
+    preferences: Dict[str, Any]
+
 @app.post("/api/filter-photos")
 async def filter_photos(request: ImageFilterRequest):
     """
@@ -625,6 +629,49 @@ async def analyze_preferences(request: PreferenceAnalysisRequest):
         return {
             "success": True,
             **result
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/humanize-preferences")
+async def humanize_preferences(request: HumanizePreferencesRequest):
+    """
+    ✨ Convert raw preference data to human-readable text
+
+    Sponsor: Groq (fast inference)
+
+    Takes structured preference data and converts it to natural language
+    for displaying to users.
+    """
+    try:
+        prompt = f"""Convert these preference data into a natural, human-readable list of 3-5 short phrases that describe what the user likes. Make it sound natural and conversational.
+
+Preference data: {request.preferences}
+
+Guidelines:
+- Convert technical terms to natural language (e.g., "architectural_style: modern" → "modern architecture")
+- Combine related items naturally (e.g., "pool, deck, windows" → "outdoor entertaining spaces with pools")
+- Keep each phrase short and punchy (3-6 words)
+- Focus on the most distinctive/interesting preferences
+- Return ONLY a comma-separated list, no explanations
+
+Example output: "contemporary architectural design, luxury modern spaces, natural light"
+"""
+
+        response = await groq_service.generate_completion(
+            prompt=prompt,
+            temperature=0.7,
+            max_tokens=100
+        )
+
+        # Clean up the response
+        humanized_text = response.strip()
+
+        return {
+            "success": True,
+            "humanized_text": humanized_text
         }
 
     except Exception as e:
