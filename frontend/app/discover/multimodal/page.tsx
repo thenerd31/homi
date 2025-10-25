@@ -3,11 +3,14 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Upload, Image as ImageIcon, File, Check } from 'lucide-react';
+import { api } from '../../../lib/api';
 
 export default function MultimodalInputPage() {
   const router = useRouter();
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [description, setDescription] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [userId] = useState('demo-user-' + Math.random().toString(36).substr(2, 9));
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -29,12 +32,56 @@ export default function MultimodalInputPage() {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = () => {
-    if (uploadedFiles.length > 0 || description.trim()) {
-      // TODO: Handle file and text submission
-      console.log('Files:', uploadedFiles);
-      console.log('Description:', description);
-      router.push('/discover');
+  const handleSubmit = async () => {
+    if (!uploadedFiles.length && !description.trim()) return;
+
+    console.log('Starting preference analysis...', {
+      fileCount: uploadedFiles.length,
+      description
+    });
+
+    setIsLoading(true);
+
+    try {
+      // Analyze preference images with backend
+      console.log('Calling api.analyzePreferences...');
+      const result = await api.analyzePreferences(uploadedFiles, description);
+
+      console.log('Analysis result:', result);
+
+      if (result.success) {
+        console.log('Preferences extracted:', result.extracted_preferences);
+        console.log('Search query:', result.search_query);
+        console.log('Reasoning:', result.reasoning);
+
+        // Use the extracted search query for conversational search
+        const convResponse = await api.conversationSearch({
+          user_message: result.search_query,
+          user_id: userId,
+          conversation_history: [],
+          extracted_so_far: {}
+        });
+
+        // If we have enough info, execute search
+        if (convResponse.status === 'ready_to_search') {
+          await api.executeSearch({
+            extracted_params: convResponse.extracted_params,
+            user_id: userId
+          });
+
+          // Navigate to swipe page
+          router.push('/discover/swipe');
+        } else {
+          // Need more info - could navigate to text page with context
+          // For now, just navigate to swipe
+          router.push('/discover/swipe');
+        }
+      }
+    } catch (error) {
+      console.error('Preference analysis error:', error);
+      alert('Failed to analyze preferences. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -148,10 +195,15 @@ export default function MultimodalInputPage() {
           <button
             type="button"
             onClick={handleSubmit}
-            className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all shadow-lg"
+            disabled={isLoading}
+            className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Submit"
           >
-            <Check className="w-7 h-7 text-white" strokeWidth={3} />
+            {isLoading ? (
+              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Check className="w-7 h-7 text-white" strokeWidth={3} />
+            )}
           </button>
         </div>
       )}
