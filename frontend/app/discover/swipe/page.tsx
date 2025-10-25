@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion';
 import { Menu, X } from 'lucide-react';
 import ListingCard from '../../components/ui/listing-card';
 import { api } from '../../../lib/api';
 
-// Sample listings data
+// TODO: make swiping smoother & perhaps include more
 const SAMPLE_LISTINGS = [
   {
     id: 1,
@@ -17,6 +17,11 @@ const SAMPLE_LISTINGS = [
       '/images/golden-gateway/golden-gateway3.avif',
       '/images/golden-gateway/golden-gateway4.avif',
     ],
+    price: 150,
+    location: 'San Francisco, CA',
+    availability: 'Available Dec 15-22',
+    beds: 2,
+    baths: 2,
   },
   {
     id: 2,
@@ -25,6 +30,11 @@ const SAMPLE_LISTINGS = [
       '/images/morrocan-home/morrocan-home2.avif',
       '/images/morrocan-home/morrocan-home3.avif',
     ],
+    price: 225,
+    location: 'Los Angeles, CA',
+    availability: 'Available Jan 1-8',
+    beds: 3,
+    baths: 2,
   },
   {
     id: 3,
@@ -33,6 +43,11 @@ const SAMPLE_LISTINGS = [
       '/images/ritzy-room/ritzy-room2.avif',
       '/images/ritzy-room/ritzy-room3.avif',
     ],
+    price: 189,
+    location: 'Beverly Hills, CA',
+    availability: 'Available Now',
+    beds: 1,
+    baths: 1,
   },
   {
     id: 4,
@@ -43,6 +58,11 @@ const SAMPLE_LISTINGS = [
       '/images/victorian-home/victorian_home4.avif',
       '/images/victorian-home/victorian_home5.avif',
     ],
+    price: 275,
+    location: 'San Francisco, CA',
+    availability: 'Available Dec 20-27',
+    beds: 4,
+    baths: 3,
   },
 ];
 
@@ -51,7 +71,7 @@ export default function SwipePage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [exitDirection, setExitDirection] = useState<'left' | 'right' | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [userId] = useState('demo-user-' + Math.random().toString(36).substr(2, 9)); // Generate random user ID for demo
+  const [userId] = useState('demo-user-' + Math.random().toString(36).substr(2, 9));
 
   const currentListing = SAMPLE_LISTINGS[currentIndex];
   const x = useMotionValue(0);
@@ -128,16 +148,18 @@ export default function SwipePage() {
   };
 
   const moveToNext = () => {
-    // Wait for exit animation to complete before changing card
     setTimeout(() => {
       setExitDirection(null);
+
       if (currentIndex < SAMPLE_LISTINGS.length - 1) {
+        // Move to next listing
         setCurrentIndex(currentIndex + 1);
       } else {
-        // No more cards
-        console.log('No more listings!');
-        setCurrentIndex(0); // Loop back for demo
+        // ✅ No more listings → go to wishlist
+        console.log('No more listings! Redirecting...');
+        router.push('/discover/swipe/wishlist');
       }
+
       x.set(0);
     }, 100);
   };
@@ -237,16 +259,14 @@ export default function SwipePage() {
               onPass={swipeLeft}
               onLike={swipeRight}
               onSuperLike={handleSuperLike}
+              price={currentListing.price}
+              location={currentListing.location}
+              availability={currentListing.availability}
+              beds={currentListing.beds}
+              baths={currentListing.baths}
             />
           </motion.div>
         </div>
-      </div>
-
-      {/* Progress indicator */}
-      <div className="px-6 pb-4 text-center">
-        <p className="text-stone-600 text-sm">
-          {currentIndex + 1} / {SAMPLE_LISTINGS.length}
-        </p>
       </div>
 
       {/* Dark overlay */}
@@ -304,7 +324,7 @@ export default function SwipePage() {
               <button
                 type="button"
                 onClick={() => {
-                  router.push('/trips');
+                  router.push('/profile/trips');
                   setSidebarOpen(false);
                 }}
                 className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"
@@ -316,7 +336,7 @@ export default function SwipePage() {
               <button
                 type="button"
                 onClick={() => {
-                  router.push('/account');
+                  router.push('/profile');
                   setSidebarOpen(false);
                 }}
                 className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Menu, X, Eye, Sparkles, Heart } from 'lucide-react';
+import { Menu, X, Glasses, ScanLine, Heart } from 'lucide-react';
 import StarIcon from "@mui/icons-material/Star";
 import Image from 'next/image';
 
@@ -104,7 +104,7 @@ export default function SellPage() {
                 className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95"
                 aria-label="Browse listings"
               >
-                <Eye className="w-6 h-6 text-white" strokeWidth={2} />
+                <Glasses className="w-6 h-6 text-white" strokeWidth={2} />
               </button>
 
               <button
@@ -113,7 +113,7 @@ export default function SellPage() {
                 className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95"
                 aria-label="Create with AI"
               >
-                <Sparkles className="w-6 h-6 text-white" strokeWidth={2} />
+                <ScanLine className="w-6 h-6 text-white" strokeWidth={2} />
               </button>
             </div>
           </div>
@@ -229,7 +229,7 @@ export default function SellPage() {
               <button
                 type="button"
                 onClick={() => {
-                  router.push('/trips');
+                  router.push('/profile/trips');
                   setSidebarOpen(false);
                 }}
                 className="text-4xl font-melodrame italic text-white hover:text-stone-400 hover:bg-white/20 transition-all px-4 py-2 rounded-lg w-full text-left"
@@ -241,7 +241,7 @@ export default function SellPage() {
               <button
                 type="button"
                 onClick={() => {
-                  router.push('/account');
+                  router.push('/profile');
                   setSidebarOpen(false);
                 }}
                 className="text-4xl font-melodrame italic text-white hover:text-stone-400 hover:bg-white/20 transition-all px-4 py-2 rounded-lg w-full text-left"
