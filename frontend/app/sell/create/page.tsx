@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Camera, List } from 'lucide-react';
 
+// TODO: outline amenities, encorporate backend
+
 export default function CreateListingPage() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
