@@ -15,7 +15,7 @@ const USER_LISTINGS = [
     bedrooms: 1,
     bathrooms: 1,
     rating: 4.99,
-    image: '/images/peaceful-private-room-B-3-min-walk-to-ocean-beach/ocean_beach_1.avif',
+    image: '/images/golden-gateway/golden-gateway1.avif',
   },
   {
     id: 2,
@@ -24,7 +24,7 @@ const USER_LISTINGS = [
     bedrooms: 1,
     bathrooms: 1,
     rating: 4.97,
-    image: '/images/classic-private-room-in-west-LA/west_la_1.avif',
+    image: '/images/morrocan-home/morrocan-home1.avif',
   },
   {
     id: 3,
@@ -33,7 +33,7 @@ const USER_LISTINGS = [
     bedrooms: 1,
     bathrooms: 1,
     rating: 4.99,
-    image: '/images/suite-A-Azure-Anticipation/suite-1.avif',
+    image: '/images/ritzy-room/ritzy-room1.avif',
   },
   {
     id: 4,
@@ -42,7 +42,7 @@ const USER_LISTINGS = [
     bedrooms: 1,
     bathrooms: 1,
     rating: 4.97,
-    image: '/images/peaceful-private-room-B-3-min-walk-to-ocean-beach/ocean_beach_2.avif',
+    image: '/images/victorian-home/victorian_home1.avif',
   },
 ];
 
@@ -132,7 +132,7 @@ export default function SellPage() {
             <div
               key={listing.id}
               className="relative rounded-2xl overflow-hidden shadow-lg cursor-pointer hover:scale-105 transition-transform duration-300"
-              onClick={() => router.push(`/listing/${listing.id}`)}
+              onClick={() => router.push(`/listing`)}
             >
               {/* Image */}
               <div className="relative w-full aspect-[3/4]">
