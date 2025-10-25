@@ -152,6 +152,9 @@ export default function VoiceInputPage() {
       </div>
 
       {/* Main Content Area */}
+      <p className="text-center text-white/70 text-sm mt-1 font-hind">
+        What kind of place feels right for you?
+      </p>
       <div className="flex-1 flex flex-col relative">
         {/* Conversation History */}
         {conversationHistory.length > 0 && (

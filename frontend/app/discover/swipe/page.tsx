@@ -12,25 +12,36 @@ const SAMPLE_LISTINGS = [
   {
     id: 1,
     images: [
-      '/images/peaceful-private-room-B-3-min-walk-to-ocean-beach/ocean_beach_1.avif',
-      '/images/peaceful-private-room-B-3-min-walk-to-ocean-beach/ocean_beach_2.avif',
-      '/images/peaceful-private-room-B-3-min-walk-to-ocean-beach/ocean_beach_3.avif',
+      '/images/golden-gateway/golden-gateway1.avif',
+      '/images/golden-gateway/golden-gateway2.avif',
+      '/images/golden-gateway/golden-gateway3.avif',
+      '/images/golden-gateway/golden-gateway4.avif',
     ],
   },
   {
     id: 2,
     images: [
-      '/images/classic-private-room-in-west-LA/west_la_1.avif',
-      '/images/classic-private-room-in-west-LA/west_la_2.avif',
-      '/images/classic-private-room-in-west-LA/west_la_3.avif',
+      '/images/morrocan-home/morrocan-home1.avif',
+      '/images/morrocan-home/morrocan-home2.avif',
+      '/images/morrocan-home/morrocan-home3.avif',
     ],
   },
   {
     id: 3,
     images: [
-      '/images/suite-A-Azure-Anticipation/suite-1.avif',
-      '/images/suite-A-Azure-Anticipation/suite-2.avif',
-      '/images/suite-A-Azure-Anticipation/suite-3.avif',
+      '/images/ritzy-room/ritzy-room1.avif',
+      '/images/ritzy-room/ritzy-room2.avif',
+      '/images/ritzy-room/ritzy-room3.avif',
+    ],
+  },
+  {
+    id: 4,
+    images: [
+      '/images/victorian-home/victorian_home1.avif',
+      '/images/victorian-home/victorian_home2.avif',
+      '/images/victorian-home/victorian_home3.avif',
+      '/images/victorian-home/victorian_home4.avif',
+      '/images/victorian-home/victorian_home5.avif',
     ],
   },
 ];
@@ -193,16 +204,6 @@ export default function SwipePage() {
       {/* Swipeable Card Container */}
       <div className="flex-1 flex items-center justify-center px-6 pb-20">
         <div className="relative w-full max-w-md aspect-[8/16]">
-          {/* Next card preview (underneath) */}
-          {currentIndex < SAMPLE_LISTINGS.length - 1 && (
-            <div className="absolute inset-0 scale-95 opacity-50 pointer-events-none">
-              <ListingCard
-                images={SAMPLE_LISTINGS[currentIndex + 1].images}
-                className="pointer-events-none"
-              />
-            </div>
-          )}
-
           {/* Current card (swipeable) */}
           <motion.div
             className="absolute inset-0 cursor-grab active:cursor-grabbing"

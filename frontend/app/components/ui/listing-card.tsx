@@ -38,7 +38,7 @@ export default function ListingCard({
   return (
     <div className={`relative w-full h-full rounded-3xl overflow-hidden shadow-2xl ${className}`}>
       {/* Image Display */}
-      <div className="relative w-full h-full">
+      <div className="relative w-full h-full pointer-events-none">
         {images.map((image, index) => (
           <div
             key={index}
@@ -59,7 +59,7 @@ export default function ListingCard({
 
       {/* Spread Slider at Top */}
       {images.length > 1 && (
-        <div className="absolute top-4 left-0 right-0 px-2 flex gap-1.5 z-20">
+        <div className="absolute top-4 left-0 right-0 px-2 flex gap-1.5 z-20 pointer-events-none">
           {images.map((_, index) => (
             <button
               type="button"
@@ -68,7 +68,7 @@ export default function ListingCard({
                 e.stopPropagation();
                 goToSlide(index);
               }}
-              className="flex-1 h-1 rounded-full overflow-hidden bg-white/30 backdrop-blur-sm"
+              className="flex-1 h-1 rounded-full overflow-hidden bg-white/30 backdrop-blur-sm pointer-events-auto"
               aria-label={`Go to image ${index + 1}`}
             >
               <div
@@ -90,7 +90,7 @@ export default function ListingCard({
               e.stopPropagation();
               setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
             }}
-            className="absolute left-0 top-0 bottom-0 w-1/3 z-10"
+            className="absolute left-0 top-16 bottom-32 w-1/3 z-10 pointer-events-auto touch-none"
             aria-label="Previous image"
           />
           <button
@@ -99,7 +99,7 @@ export default function ListingCard({
               e.stopPropagation();
               setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
             }}
-            className="absolute right-0 top-0 bottom-0 w-1/3 z-10"
+            className="absolute right-0 top-16 bottom-32 w-1/3 z-10 pointer-events-auto touch-none"
             aria-label="Next image"
           />
         </>
@@ -116,7 +116,7 @@ export default function ListingCard({
 
       {/* Action Buttons - Inside Card at Bottom */}
       {showButtons && (
-        <div className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-6 pb-8 z-20">
+        <div className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-6 pb-8 z-20 pointer-events-none">
           {/* Pass Button */}
           <button
             type="button"
@@ -124,7 +124,7 @@ export default function ListingCard({
               e.stopPropagation();
               onPass?.();
             }}
-            className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95"
+            className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95 pointer-events-auto touch-none"
             aria-label="Pass"
           >
             <X className="w-6 h-6 text-white" strokeWidth={2} />
@@ -137,7 +137,7 @@ export default function ListingCard({
               e.stopPropagation();
               onLike?.();
             }}
-            className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95"
+            className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95 pointer-events-auto touch-none"
             aria-label="Like"
           >
             <Heart className="w-8 h-8 text-white" strokeWidth={2} />
@@ -150,7 +150,7 @@ export default function ListingCard({
               e.stopPropagation();
               onSuperLike?.();
             }}
-            className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95"
+            className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95 pointer-events-auto touch-none"
             aria-label="Super Like"
           >
             <Shuffle className="w-6 h-6 text-white" strokeWidth={2} />

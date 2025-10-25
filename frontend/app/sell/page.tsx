@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Menu, X, Eye, Sparkles, Heart } from 'lucide-react';
+import StarIcon from "@mui/icons-material/Star";
 import Image from 'next/image';
 
-// Hardcoded user listings
+// TODO: change hardcoded data
 const USER_LISTINGS = [
   {
     id: 1,
@@ -51,7 +52,6 @@ export default function SellPage() {
 
   return (
     <div className="min-h-screen bg-black relative">
-      {/* Hamburger Menu */}
       <button
         type="button"
         onClick={() => setSidebarOpen(true)}
@@ -61,17 +61,16 @@ export default function SellPage() {
         <Menu className="w-6 h-6" />
       </button>
 
-      {/* Header */}
+      {/* header */}
       <div className="pt-12 px-6">
         <h1 className="text-4xl font-melodrame italic text-white mb-4">
           Start Listing
         </h1>
       </div>
 
-      {/* Placeholder Card */}
+      {/* placeholder */}
       <div className="px-6 pb-8">
         <div className="relative w-full max-w-md mx-auto aspect-[8/16] rounded-3xl shadow-2xl overflow-hidden bg-gradient-to-b from-stone-300 to-stone-500">
-          {/* Background Image */}
           <Image
             src="/images/placeholder-card.png"
             alt="Start Listing"
@@ -80,12 +79,12 @@ export default function SellPage() {
             priority
           />
 
-          {/* Gradient overlay */}
+          {/* gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40" />
 
-          {/* Content */}
-          <div className="relative h-full flex flex-col items-start justify-between p-8">
-            <div className="flex-1 flex items-end pb-12">
+          {/* content */}
+          <div className="relative h-full flex flex-col items-start justify-center p-8">
+            <div className="flex-1 flex items-center">
               <div className="text-white">
                 <p className="text-lg mb-2 font-hind font-light">Ready to Host?</p>
                 <h2 className="text-3xl font-semibold leading-tight mb-1">
@@ -97,8 +96,8 @@ export default function SellPage() {
               </div>
             </div>
 
-            {/* Action buttons */}
-            <div className="flex gap-6 pb-8 mx-auto">
+            {/* action buttons */}
+            <div className="flex gap-8 pb-8 mx-auto">
               <button
                 type="button"
                 onClick={() => router.push('/sell/create')}
@@ -121,7 +120,7 @@ export default function SellPage() {
         </div>
       </div>
 
-      {/* Your Listings Section */}
+      {/* listings */}
       <div className="px-6 pb-24">
         <h2 className="text-3xl font-melodrame italic text-white mb-6">
           Your Listings
@@ -144,7 +143,6 @@ export default function SellPage() {
                   className="object-cover"
                 />
 
-                {/* Favorite icon overlay */}
                 <button
                   type="button"
                   className="absolute top-3 right-3 p-2 rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/50 transition-colors"
@@ -164,11 +162,11 @@ export default function SellPage() {
                   {listing.title}
                 </h3>
                 <p className="text-white/80 text-sm mb-2">
-                  {listing.guests} guests � {listing.bedrooms} bedroom{listing.bedrooms > 1 ? 's' : ''} � {listing.bathrooms} bath{listing.bathrooms > 1 ? 's' : ''}
+                  {listing.guests} guests, {listing.bedrooms} bedroom{listing.bedrooms > 1 ? 's' : ''}, {listing.bathrooms} bath{listing.bathrooms > 1 ? 's' : ''}
                 </p>
                 <div className="flex items-center gap-1">
-                  <span className="text-white text-sm font-semibold"></span>
-                  <span className="text-white text-sm font-semibold">{listing.rating}</span>
+                  <span className="text-white text-sm font-semibold"></span>
+                  <span className="text-white text-sm font-semibold">{listing.rating} <StarIcon sx={{ fontSize: "0.85em", color: "#facc15", verticalAlign: "middle" }} /> </span>
                 </div>
               </div>
             </div>
@@ -176,7 +174,7 @@ export default function SellPage() {
         </div>
       </div>
 
-      {/* Dark overlay */}
+      {/* dark overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 transition-opacity"
@@ -184,13 +182,13 @@ export default function SellPage() {
         />
       )}
 
-      {/* Sidebar */}
+      {/* sidebar */}
       <div
         className={`fixed top-0 right-0 h-full w-64 bg-black shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
           sidebarOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        {/* Close button */}
+        {/* close button */}
         <button
           type="button"
           onClick={() => setSidebarOpen(false)}
@@ -210,7 +208,7 @@ export default function SellPage() {
                   router.push('/discover');
                   setSidebarOpen(false);
                 }}
-                className="text-4xl font-melodrame italic text-white hover:text-stone-400 transition-colors"
+                className="text-4xl font-melodrame italic text-white hover:text-stone-400 hover:bg-white/20 transition-all px-4 py-2 rounded-lg w-full text-left"
               >
                 Discover
               </button>
@@ -222,7 +220,7 @@ export default function SellPage() {
                   router.push('/map');
                   setSidebarOpen(false);
                 }}
-                className="text-4xl font-melodrame italic text-white hover:text-stone-400 transition-colors"
+                className="text-4xl font-melodrame italic text-white hover:text-stone-400 hover:bg-white/20 transition-all px-4 py-2 rounded-lg w-full text-left"
               >
                 Map
               </button>
@@ -234,7 +232,7 @@ export default function SellPage() {
                   router.push('/trips');
                   setSidebarOpen(false);
                 }}
-                className="text-4xl font-melodrame italic text-white hover:text-stone-400 transition-colors"
+                className="text-4xl font-melodrame italic text-white hover:text-stone-400 hover:bg-white/20 transition-all px-4 py-2 rounded-lg w-full text-left"
               >
                 Trips
               </button>
@@ -246,7 +244,7 @@ export default function SellPage() {
                   router.push('/account');
                   setSidebarOpen(false);
                 }}
-                className="text-4xl font-melodrame italic text-white hover:text-stone-400 transition-colors"
+                className="text-4xl font-melodrame italic text-white hover:text-stone-400 hover:bg-white/20 transition-all px-4 py-2 rounded-lg w-full text-left"
               >
                 Account
               </button>
