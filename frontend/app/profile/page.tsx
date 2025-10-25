@@ -174,7 +174,6 @@ export default function ProfilePage() {
               <div
                 key={trip.id}
                 className="relative rounded-2xl overflow-hidden shadow-lg cursor-pointer hover:scale-105 transition-transform duration-300"
-                onClick={() => router.push(`/trips/${trip.id}`)}
               >
                 <div className="relative w-full aspect-square">
                   <Image

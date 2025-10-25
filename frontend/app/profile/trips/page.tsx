@@ -95,7 +95,6 @@ export default function PastTripsPage() {
               <div
                 key={trip.id}
                 className="bg-white/40 backdrop-blur-xl border border-white/30 rounded-2xl p-4 shadow-lg cursor-pointer hover:bg-white/50 transition-all"
-                onClick={() => router.push(`/trips/${trip.id}`)}
               >
                 <div className="flex items-center gap-4">
                   {/* Trip Image */}
@@ -134,7 +133,6 @@ export default function PastTripsPage() {
             <div
               key={trip.id}
               className="bg-white/40 backdrop-blur-xl border border-white/30 rounded-2xl p-4 shadow-lg cursor-pointer hover:bg-white/50 transition-all"
-              onClick={() => router.push(`/trips/${trip.id}`)}
             >
               <div className="flex items-center gap-4">
                 {/* Trip Image */}
@@ -260,7 +258,7 @@ export default function PastTripsPage() {
               <button
                 type="button"
                 onClick={() => {
-                  router.push('/trips');
+                  router.push('/profile/trips');
                   setSidebarOpen(false);
                 }}
                 className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 hover:bg-black/10 transition-all px-4 py-2 rounded-lg w-full text-left"
