@@ -37,7 +37,6 @@ class YOLOService:
             self.amenity_map = self._create_amenity_mapping()
             self.room_indicators = self._create_room_indicators()
             self.luxury_indicators = self._create_luxury_indicators()
-            self.family_indicators = self._create_family_indicators()
 
         except Exception as e:
             print(f"Error initializing YOLO: {e}")
