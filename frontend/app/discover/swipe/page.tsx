@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
 import ListingCard from '../../components/ui/listing-card';
+import { api } from '../../../lib/api';
 
 // Sample listings data
 const SAMPLE_LISTINGS = [
@@ -35,6 +36,7 @@ const SAMPLE_LISTINGS = [
 export default function SwipePage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [exitDirection, setExitDirection] = useState<'left' | 'right' | null>(null);
+  const [userId] = useState('demo-user-' + Math.random().toString(36).substr(2, 9)); // Generate random user ID for demo
 
   const currentListing = SAMPLE_LISTINGS[currentIndex];
   const x = useMotionValue(0);
@@ -58,18 +60,55 @@ export default function SwipePage() {
     }
   };
 
-  const handlePass = () => {
+  const handlePass = async () => {
     console.log('Passed listing:', currentListing.id);
+
+    // Send to backend
+    try {
+      await api.swipe({
+        user_id: userId,
+        listing_id: `listing-${currentListing.id}`,
+        action: 'pass'
+      });
+    } catch (error) {
+      console.error('Failed to record swipe:', error);
+    }
+
     moveToNext();
   };
 
-  const handleLike = () => {
+  const handleLike = async () => {
     console.log('Liked listing:', currentListing.id);
+
+    // Send to backend
+    try {
+      const result = await api.swipe({
+        user_id: userId,
+        listing_id: `listing-${currentListing.id}`,
+        action: 'like'
+      });
+      console.log('Saved!', result.message);
+    } catch (error) {
+      console.error('Failed to record swipe:', error);
+    }
+
     moveToNext();
   };
 
-  const handleSuperLike = () => {
+  const handleSuperLike = async () => {
     console.log('Super liked listing:', currentListing.id);
+
+    // Send to backend as regular like (super like = like with higher priority)
+    try {
+      await api.swipe({
+        user_id: userId,
+        listing_id: `listing-${currentListing.id}`,
+        action: 'like'
+      });
+    } catch (error) {
+      console.error('Failed to record swipe:', error);
+    }
+
     moveToNext();
   };
 

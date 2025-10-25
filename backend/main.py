@@ -24,6 +24,7 @@ from services.conversation_service import ConversationService
 from services.saved_listings_service import SavedListingsService
 from services.seller_chatbot_service import SellerChatbotService
 from services.image_filter_service import ImageFilterService
+from services.preference_analysis_service import PreferenceAnalysisService
 # Fetch.ai agents are separate processes - see agents/fetch_agents/
 from utils.elastic_client import ElasticClient
 from utils.supabase_client import SupabaseClient
@@ -60,6 +61,7 @@ conversation_service = ConversationService()
 saved_listings_service = SavedListingsService()
 seller_chatbot_service = SellerChatbotService()
 image_filter_service = ImageFilterService()
+preference_analysis_service = PreferenceAnalysisService()
 elastic_client = ElasticClient()
 supabase_client = SupabaseClient()
 # arize_logger = ArizeLogger()  # Placeholder
@@ -527,6 +529,11 @@ class QuickCheckRequest(BaseModel):
     """Request to check a single photo quality"""
     photo_url: str
 
+class PreferenceAnalysisRequest(BaseModel):
+    """Request to analyze user preference images"""
+    image_urls: List[str]
+    text_description: Optional[str] = ""
+
 @app.post("/api/filter-photos")
 async def filter_photos(request: ImageFilterRequest):
     """
@@ -569,6 +576,37 @@ async def check_photo_quality(request: QuickCheckRequest):
     """
     try:
         result = await image_filter_service.quick_quality_check(request.photo_url)
+
+        return {
+            "success": True,
+            **result
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/analyze-preferences")
+async def analyze_preferences(request: PreferenceAnalysisRequest):
+    """
+    🖼️ BUYER FEATURE: Analyze preference images
+
+    Sponsor: Anthropic (Claude Vision)
+
+    Use case: Buyer uploads photos of places they love →
+    AI extracts visual preferences → Converts to search criteria
+
+    Features:
+    - Style detection (modern, rustic, beachy, etc.)
+    - Amenity extraction (pool, fireplace, etc.)
+    - Atmosphere analysis (cozy, spacious, bright, etc.)
+    - Location type inference (urban, coastal, etc.)
+    """
+    try:
+        result = await preference_analysis_service.analyze_preference_images(
+            image_urls=request.image_urls,
+            text_description=request.text_description
+        )
 
         return {
             "success": True,
