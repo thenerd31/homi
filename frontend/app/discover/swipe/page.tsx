@@ -2,40 +2,56 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion';
 import { Menu, X } from 'lucide-react';
 import ListingCard from '../../components/ui/listing-card';
 import { api } from '../../../lib/api';
 
-// Sample listings data (fallback)
+// TODO: make swiping smoother & perhaps include more
+// TODO: slight error
 const SAMPLE_LISTINGS = [
   {
-    id: 1,
+    id: 'listing_1',
     images: [
       '/images/golden-gateway/golden-gateway1.avif',
       '/images/golden-gateway/golden-gateway2.avif',
       '/images/golden-gateway/golden-gateway3.avif',
       '/images/golden-gateway/golden-gateway4.avif',
     ],
+    price: 150,
+    location: 'San Francisco, CA',
+    availability: 'Available Dec 15-22',
+    beds: 2,
+    baths: 2,
   },
   {
-    id: 2,
+    id: 'listing_8',
     images: [
       '/images/morrocan-home/morrocan-home1.avif',
       '/images/morrocan-home/morrocan-home2.avif',
       '/images/morrocan-home/morrocan-home3.avif',
     ],
+    price: 225,
+    location: 'Los Angeles, CA',
+    availability: 'Available Jan 1-8',
+    beds: 3,
+    baths: 2,
   },
   {
-    id: 3,
+    id: 'listing_3',
     images: [
       '/images/ritzy-room/ritzy-room1.avif',
       '/images/ritzy-room/ritzy-room2.avif',
       '/images/ritzy-room/ritzy-room3.avif',
     ],
+    price: 189,
+    location: 'Beverly Hills, CA',
+    availability: 'Available Now',
+    beds: 1,
+    baths: 1,
   },
   {
-    id: 4,
+    id: 'listing_4',
     images: [
       '/images/victorian-home/victorian_home1.avif',
       '/images/victorian-home/victorian_home2.avif',
@@ -43,6 +59,11 @@ const SAMPLE_LISTINGS = [
       '/images/victorian-home/victorian_home4.avif',
       '/images/victorian-home/victorian_home5.avif',
     ],
+    price: 275,
+    location: 'San Francisco, CA',
+    availability: 'Available Dec 20-27',
+    beds: 4,
+    baths: 3,
   },
 ];
 
@@ -51,41 +72,22 @@ export default function SwipePage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [exitDirection, setExitDirection] = useState<'left' | 'right' | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [swipedIndices, setSwipedIndices] = useState<Set<number>>(new Set());
   const [userId] = useState(() => {
-    // Try to get userId from localStorage, or generate new one
+    // Get existing user ID from localStorage or create a new one
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('vibe_user_id') || 'demo-user-' + Math.random().toString(36).substr(2, 9);
+      const existingUserId = localStorage.getItem('vibe_user_id');
+      if (existingUserId) {
+        return existingUserId;
+      }
+      const newUserId = 'demo-user-' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('vibe_user_id', newUserId);
+      return newUserId;
     }
     return 'demo-user-' + Math.random().toString(36).substr(2, 9);
   });
-  const [listings, setListings] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Load search results from localStorage on mount
-  useEffect(() => {
-    try {
-      // Try to get search results from localStorage
-      const storedResults = localStorage.getItem('vibe_search_results');
-      const storedUserId = localStorage.getItem('vibe_user_id');
-
-      if (storedResults) {
-        const parsedResults = JSON.parse(storedResults);
-        console.log('Loaded search results from localStorage:', parsedResults.length, 'listings');
-        setListings(parsedResults);
-      } else {
-        console.log('No search results found in localStorage, using sample listings');
-        setListings(SAMPLE_LISTINGS);
-      }
-    } catch (error) {
-      console.error('Failed to load listings:', error);
-      console.log('Using sample listings as fallback');
-      setListings(SAMPLE_LISTINGS);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const currentListing = listings[currentIndex];
+  const currentListing = SAMPLE_LISTINGS[currentIndex];
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-300, 0, 300], [-15, 0, 15]);
   const opacity = useTransform(x, [-200, -100, 0, 100, 200], [0, 0.5, 1, 0.5, 0]);
@@ -110,11 +112,14 @@ export default function SwipePage() {
   const handlePass = async () => {
     console.log('Passed listing:', currentListing.id);
 
+    // Mark this index as swiped
+    setSwipedIndices(prev => new Set(prev).add(currentIndex));
+
     // Send to backend
     try {
       await api.swipe({
         user_id: userId,
-        listing_id: `listing-${currentListing.id}`,
+        listing_id: currentListing.id,
         action: 'pass'
       });
     } catch (error) {
@@ -127,11 +132,14 @@ export default function SwipePage() {
   const handleLike = async () => {
     console.log('Liked listing:', currentListing.id);
 
+    // Mark this index as swiped
+    setSwipedIndices(prev => new Set(prev).add(currentIndex));
+
     // Send to backend
     try {
       const result = await api.swipe({
         user_id: userId,
-        listing_id: `listing-${currentListing.id}`,
+        listing_id: currentListing.id,
         action: 'like'
       });
       console.log('Saved!', result.message);
@@ -142,34 +150,42 @@ export default function SwipePage() {
     moveToNext();
   };
 
-  const handleSuperLike = async () => {
-    console.log('Super liked listing:', currentListing.id);
+  const handleShuffle = () => {
+    console.log('Shuffled listing:', currentListing.id);
 
-    // send to backend as regular like (super like = like with higher priority)
-    try {
-      await api.swipe({
-        user_id: userId,
-        listing_id: `listing-${currentListing.id}`,
-        action: 'like'
-      });
-    } catch (error) {
-      console.error('Failed to record swipe:', error);
+    // Get indices of cards that haven't been swiped yet
+    const remainingIndices = SAMPLE_LISTINGS
+      .map((_, index) => index)
+      .filter(index => !swipedIndices.has(index) && index !== currentIndex);
+
+    if (remainingIndices.length === 0) {
+      console.log('No more cards to shuffle!');
+      return;
     }
 
-    moveToNext();
+    // Pick random index from remaining cards
+    const randomIndex = remainingIndices[Math.floor(Math.random() * remainingIndices.length)];
+    setExitDirection('left');
+    setTimeout(() => {
+      setExitDirection(null);
+      setCurrentIndex(randomIndex);
+      x.set(0);
+    }, 300);
   };
 
   const moveToNext = () => {
-    // Wait for exit animation to complete before changing card
     setTimeout(() => {
       setExitDirection(null);
-      if (currentIndex < listings.length - 1) {
+
+      if (currentIndex < SAMPLE_LISTINGS.length - 1) {
+        // Move to next listing
         setCurrentIndex(currentIndex + 1);
       } else {
-        // No more cards
-        console.log('No more listings!');
-        // Don't loop - show "no more listings" state
+        // ✅ No more listings → go to wishlist
+        console.log('No more listings! Redirecting...');
+        router.push('/discover/swipe/wishlist');
       }
+
       x.set(0);
     }, 100);
   };
@@ -198,7 +214,7 @@ export default function SwipePage() {
         swipeRight();
       } else if (event.key === 'ArrowUp') {
         event.preventDefault();
-        handleSuperLike();
+        handleShuffle();
       }
     };
 
@@ -206,38 +222,10 @@ export default function SwipePage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [exitDirection]); // Re-attach listener when exitDirection changes
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#DFDFD3] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-stone-900 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-stone-900 text-xl font-melodrame italic">Loading your matches...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // No more listings state
   if (!currentListing) {
     return (
-      <div className="min-h-screen bg-[#DFDFD3] flex items-center justify-center px-6">
-        <div className="text-center">
-          <div className="text-6xl mb-4">✨</div>
-          <h2 className="text-3xl font-melodrame italic text-stone-900 mb-2">
-            You've seen them all!
-          </h2>
-          <p className="text-stone-600 mb-8">
-            No more listings to show. Try a new search?
-          </p>
-          <button
-            type="button"
-            onClick={() => router.push('/discover/text')}
-            className="px-8 py-3 bg-stone-900 text-white rounded-full font-medium hover:bg-stone-800 transition-colors"
-          >
-            New Search
-          </button>
-        </div>
+      <div className="min-h-screen bg-gradient-to-b from-stone-100 to-stone-200 flex items-center justify-center">
+        <p className="text-stone-600 text-xl">No more listings!</p>
       </div>
     );
   }
@@ -264,19 +252,6 @@ export default function SwipePage() {
       {/* Swipeable Card Container */}
       <div className="flex-1 flex items-center justify-center px-6 pb-20">
         <div className="relative w-full max-w-md aspect-[8/16]">
-<<<<<<< Updated upstream
-=======
-          {/* Next card preview (underneath) */}
-          {currentIndex < listings.length - 1 && (
-            <div className="absolute inset-0 scale-95 opacity-50 pointer-events-none">
-              <ListingCard
-                images={listings[currentIndex + 1].images}
-                className="pointer-events-none"
-              />
-            </div>
-          )}
-
->>>>>>> Stashed changes
           {/* Current card (swipeable) */}
           <motion.div
             className="absolute inset-0 cursor-grab active:cursor-grabbing"
@@ -309,17 +284,15 @@ export default function SwipePage() {
               images={currentListing.images}
               onPass={swipeLeft}
               onLike={swipeRight}
-              onSuperLike={handleSuperLike}
+              onShuffle={handleShuffle}
+              price={currentListing.price}
+              location={currentListing.location}
+              availability={currentListing.availability}
+              beds={currentListing.beds}
+              baths={currentListing.baths}
             />
           </motion.div>
         </div>
-      </div>
-
-      {/* Progress indicator */}
-      <div className="px-6 pb-4 text-center">
-        <p className="text-stone-600 text-sm">
-          {currentIndex + 1} / {listings.length}
-        </p>
       </div>
 
       {/* Dark overlay */}
@@ -347,8 +320,8 @@ export default function SwipePage() {
         </button>
 
         {/* Menu items */}
-        <nav className="pt-24 px-8">
-          <ul className="space-y-8">
+        <nav className="pt-24 px-8 flex flex-col h-full">
+          <ul className="space-y-8 flex-1">
             <li>
               <button
                 type="button"
@@ -377,7 +350,7 @@ export default function SwipePage() {
               <button
                 type="button"
                 onClick={() => {
-                  router.push('/trips');
+                  router.push('/user-profile/trips');
                   setSidebarOpen(false);
                 }}
                 className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"
@@ -389,7 +362,7 @@ export default function SwipePage() {
               <button
                 type="button"
                 onClick={() => {
-                  router.push('/account');
+                  router.push('/user-profile');
                   setSidebarOpen(false);
                 }}
                 className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 transition-colors"
@@ -398,6 +371,23 @@ export default function SwipePage() {
               </button>
             </li>
           </ul>
+
+          {/* Switch to Host Mode Button */}
+          <div className="pb-8">
+            <button
+              type="button"
+              onClick={() => {
+                router.push('/sell');
+                setSidebarOpen(false);
+              }}
+              className="w-full bg-white/20 backdrop-blur-xl border border-white/30 text-stone-900 rounded-2xl py-4 px-6 font-semibold hover:bg-white/30 hover:scale-105 transition-all shadow-lg flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              Switch to Hosting
+            </button>
+          </div>
         </nav>
       </div>
     </div>

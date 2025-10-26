@@ -271,16 +271,6 @@ export class VibeAPI {
     return response.json();
   }
 
-  async health(): Promise<{ status: string; services: Record<string, boolean> }> {
-    const response = await fetch(`${this.baseUrl}/health`);
-
-    if (!response.ok) {
-      throw new Error(`Health check failed: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
   async humanizePreferences(preferences: Record<string, any>): Promise<{
     success: boolean;
     humanized_text: string;
@@ -295,6 +285,16 @@ export class VibeAPI {
 
     if (!response.ok) {
       throw new Error(`Humanize preferences failed: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async health(): Promise<{ status: string; services: Record<string, boolean> }> {
+    const response = await fetch(`${this.baseUrl}/health`);
+
+    if (!response.ok) {
+      throw new Error(`Health check failed: ${response.statusText}`);
     }
 
     return response.json();

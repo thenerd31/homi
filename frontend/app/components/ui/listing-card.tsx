@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Heart, Shuffle } from 'lucide-react';
+import { X, Heart, Shuffle, MapPin, Calendar, BedDouble, Bath, Glasses } from 'lucide-react';
 import Image from 'next/image';
 
 interface ListingCardProps {
@@ -9,8 +9,14 @@ interface ListingCardProps {
   className?: string;
   onPass?: () => void;
   onLike?: () => void;
-  onSuperLike?: () => void;
+  onShuffle?: () => void;
   showButtons?: boolean;
+  price?: number;
+  location?: string;
+  availability?: string;
+  beds?: number;
+  baths?: number;
+  showDetails?: boolean;
 }
 
 export default function ListingCard({
@@ -18,8 +24,14 @@ export default function ListingCard({
   className = '',
   onPass,
   onLike,
-  onSuperLike,
-  showButtons = true
+  onShuffle,
+  showButtons = true,
+  price,
+  location,
+  availability,
+  beds,
+  baths,
+  showDetails = true
 }: ListingCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
@@ -50,6 +62,7 @@ export default function ListingCard({
               src={image}
               alt={`Listing image ${index + 1}`}
               fill
+              sizes="(max-width: 768px) 100vw, 50vw"
               className="object-cover"
               priority={index === 0}
             />
@@ -105,18 +118,16 @@ export default function ListingCard({
         </>
       )}
 
-      {/* Incognito Icon - Top Right */}
-      <div className="absolute top-4 right-4 z-20">
+      {/* Glasses Icon - Top Right */}
+      <div className="absolute top-8 right-4 z-20">
         <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center shadow-lg">
-          <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/>
-          </svg>
+          <Glasses className="w-7 h-7 text-white" strokeWidth={2} />
         </div>
       </div>
 
-      {/* Action Buttons - Inside Card at Bottom */}
+      {/* Action Buttons - Above Listing Details */}
       {showButtons && (
-        <div className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-6 pb-8 z-20 pointer-events-none">
+        <div className="absolute bottom-42 left-0 right-0 flex items-center justify-center gap-6 z-20 pointer-events-none">
           {/* Pass Button */}
           <button
             type="button"
@@ -143,18 +154,67 @@ export default function ListingCard({
             <Heart className="w-8 h-8 text-white" strokeWidth={2} />
           </button>
 
-          {/* Super Like Button */}
+          {/* Shuffle Button */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onSuperLike?.();
+              onShuffle?.();
             }}
             className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95 pointer-events-auto touch-none"
-            aria-label="Super Like"
+            aria-label="Shuffle"
           >
             <Shuffle className="w-6 h-6 text-white" strokeWidth={2} />
           </button>
+        </div>
+      )}
+
+      {/* Listing Details - Bottom Border */}
+      {showDetails && (price || location || availability || beds || baths) && (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/70 to-transparent p-6 pb-8 z-10">
+          <div className="space-y-3">
+            {/* Price */}
+            {price !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-white text-2xl font-bold">${price}</span>
+                <span className="text-white/80 text-sm">per night</span>
+              </div>
+            )}
+
+            {/* Location */}
+            {location && (
+              <div className="flex items-center gap-2 text-white/90">
+                <MapPin className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm font-medium">{location}</span>
+              </div>
+            )}
+
+            {/* Availability */}
+            {availability && (
+              <div className="flex items-center gap-2 text-white/90">
+                <Calendar className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm">{availability}</span>
+              </div>
+            )}
+
+            {/* Beds & Baths */}
+            {(beds !== undefined || baths !== undefined) && (
+              <div className="flex items-center gap-4 text-white/90">
+                {beds !== undefined && (
+                  <div className="flex items-center gap-1.5">
+                    <BedDouble className="w-4 h-4" />
+                    <span className="text-sm">{beds} {beds === 1 ? 'bed' : 'beds'}</span>
+                  </div>
+                )}
+                {baths !== undefined && (
+                  <div className="flex items-center gap-1.5">
+                    <Bath className="w-4 h-4" />
+                    <span className="text-sm">{baths} {baths === 1 ? 'bath' : 'baths'}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

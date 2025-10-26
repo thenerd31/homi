@@ -10,7 +10,19 @@ export default function MultimodalInputPage() {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [description, setDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [userId] = useState('demo-user-' + Math.random().toString(36).substr(2, 9));
+  const [userId] = useState(() => {
+    // Get existing user ID from localStorage or create a new one
+    if (typeof window !== 'undefined') {
+      const existingUserId = localStorage.getItem('vibe_user_id');
+      if (existingUserId) {
+        return existingUserId;
+      }
+      const newUserId = 'demo-user-' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('vibe_user_id', newUserId);
+      return newUserId;
+    }
+    return 'demo-user-' + Math.random().toString(36).substr(2, 9);
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,24 +76,15 @@ export default function MultimodalInputPage() {
 
         // If we have enough info, execute search
         if (convResponse.status === 'ready_to_search') {
-          const searchResult = await api.executeSearch({
+          await api.executeSearch({
             extracted_params: convResponse.extracted_params,
             user_id: userId
           });
-
-          // Store search results in localStorage for swipe page
-          if (searchResult.success && searchResult.matches) {
-            localStorage.setItem('vibe_search_results', JSON.stringify(searchResult.matches));
-            localStorage.setItem('vibe_user_id', userId);
-          }
-
-          // Navigate to swipe page
-          router.push('/discover/swipe');
-        } else {
-          // Need more info - could navigate to text page with context
-          // For now, just navigate to swipe
-          router.push('/discover/swipe');
         }
+
+        // Navigate to results page with extracted preferences
+        const prefsParam = encodeURIComponent(JSON.stringify(result.extracted_preferences));
+        router.push(`/discover/multimodal/results?preferences=${prefsParam}`);
       }
     } catch (error) {
       console.error('Preference analysis error:', error);
