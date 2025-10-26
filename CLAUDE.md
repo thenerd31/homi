@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VIBE is an AI-native home sharing platform that reimagines Airbnb with conversational search, Tinder-style swiping, and AR-powered listing creation. Built for CalHacks 2025 to demonstrate how a travel platform would be designed today using modern AI capabilities.
+**Homi** is an AI-native home sharing platform that reimagines Airbnb with conversational search, Tinder-style swiping, and AR-powered listing creation. Built for CalHacks 2025 to demonstrate how a travel platform would be designed today using modern AI capabilities.
 
 **Core Innovation**: Replace traditional filter UIs with natural conversation, replace endless scrolling with intelligent swiping, and replace manual listing creation with AR-powered scanning.
 
