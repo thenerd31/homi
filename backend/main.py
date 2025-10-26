@@ -1098,6 +1098,31 @@ class VapiStopRequest(BaseModel):
     """Request to stop a Vapi call"""
     call_id: str
 
+@app.get("/api/vapi/public-key")
+async def get_vapi_public_key():
+    """
+    🔑 Get Vapi public key for frontend SDK initialization
+
+    Sponsor: Vapi
+
+    Returns the Vapi public key that can be safely used in the frontend.
+    """
+    vapi_public_key = os.getenv("VAPI_PUBLIC_KEY", "")
+
+    if not vapi_public_key:
+        # Return a demo key or empty string for development
+        return {
+            "success": True,
+            "public_key": "",
+            "note": "VAPI_PUBLIC_KEY not configured. Voice features will use demo mode."
+        }
+
+    return {
+        "success": True,
+        "public_key": vapi_public_key
+    }
+
+
 @app.post("/api/vapi/call/start")
 async def vapi_start_call(request: VapiCallRequest):
     """
