@@ -3,27 +3,29 @@ VIBE - AI-Native Home Sharing Platform
 Main FastAPI Application
 """
 
-# ARIZE PHOENIX - Observability & Tracing
+# ARIZE PHOENIX - Observability & Tracing (commented out for quick testing)
 # Must be imported BEFORE any Anthropic SDK usage
-from phoenix.otel import register
-from openinference.instrumentation.anthropic import AnthropicInstrumentor
+# from phoenix.otel import register
+# from openinference.instrumentation.anthropic import AnthropicInstrumentor
 
 # Register Phoenix tracing
-tracer_provider = register(
-    project_name="vibe-ai-platform",
-    endpoint="http://localhost:6006/v1/traces"
-)
+# tracer_provider = register(
+#     project_name="vibe-ai-platform",
+#     endpoint="http://localhost:6006/v1/traces"
+# )
 
 # Instrument Anthropic SDK to trace all Claude API calls
-AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
+# AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
 import httpx
 from dotenv import load_dotenv
+import base64
 
 # Import our modules
 # from services.search_service import SearchService  # Placeholder service
@@ -40,6 +42,7 @@ from services.image_filter_service import ImageFilterService
 from services.preference_analysis_service import PreferenceAnalysisService
 from services.vapi_service import VapiService, get_vapi_service
 from services.geocoding_service import GeocodingService
+from services.yolo_service import YOLOService
 # Fetch.ai agents are separate processes - see agents/fetch_agents/
 from utils.elastic_client import ElasticClient
 from utils.supabase_client import SupabaseClient
@@ -78,6 +81,7 @@ image_filter_service = ImageFilterService()
 preference_analysis_service = PreferenceAnalysisService()
 vapi_service = get_vapi_service()
 geocoding_service = GeocodingService()
+yolo_service = YOLOService(model_path="yolov8n.pt")
 elastic_client = ElasticClient()
 supabase_client = SupabaseClient()
 # arize_logger = ArizeLogger()  # Placeholder
@@ -1123,6 +1127,174 @@ async def vapi_get_listing_context(listing_id: str):
 
 
 # ============================================================================
+# REAL-TIME YOLO DETECTION (WebSocket)
+# ============================================================================
+
+@app.websocket("/ws/scan")
+async def websocket_scan(websocket: WebSocket):
+    """
+    🎥 Real-time YOLO object detection via WebSocket with session management
+
+    Use case: Phone camera streaming for property scanning
+
+    Protocol:
+    - Client sends: {"type": "start"} to begin session
+    - Client sends: {"type": "frame", "image": "base64_jpeg_data"}
+    - Server responds: {"type": "detection", "objects": [...], "amenities": [...]}
+    - Client sends: {"type": "finalize"} to get aggregated results
+    """
+    await websocket.accept()
+    session_id = None
+    frame_count = 0
+
+    try:
+        print("📱 Phone connected to WebSocket")
+
+        # Create session
+        session_id = yolo_service.create_session()
+
+        await websocket.send_json({
+            "type": "connected",
+            "session_id": session_id,
+            "message": "Ready to scan! Point camera at rooms in your property"
+        })
+
+        while True:
+            # Receive message from phone
+            data = await websocket.receive_json()
+
+            if data.get("type") == "frame":
+                frame_count += 1
+
+                # Decode base64 image
+                image_base64 = data.get("image", "")
+                if not image_base64:
+                    await websocket.send_json({"error": "No image data"})
+                    continue
+
+                # Check if this should be stored as a photo
+                store_image = data.get("store_image", False)
+
+                # Remove data URL prefix if present
+                image_data_uri = image_base64
+                if "," in image_base64:
+                    image_base64 = image_base64.split(",")[1]
+
+                image_bytes = base64.b64decode(image_base64)
+
+                # Run YOLO detection
+                result = await yolo_service.detect_realtime(image_bytes)
+
+                # Add to session (stores image only when store_image=True)
+                yolo_service.add_frame_to_session(
+                    session_id,
+                    result,
+                    image_data_uri if store_image else None,
+                    store_image
+                )
+
+                # Send results back to phone
+                await websocket.send_json({
+                    "type": "detection",
+                    "frame": frame_count,
+                    "session_id": session_id,
+                    **result
+                })
+
+                # Log photo captures and periodic updates
+                if store_image:
+                    session_info = yolo_service.get_session(session_id)
+                    print(f"📸 Photo captured! Total: {session_info['images_captured']} images, Room: {result.get('room_type')}")
+                elif frame_count % 20 == 0:
+                    session_info = yolo_service.get_session(session_id)
+                    print(f"🔄 Frame {frame_count} - Amenities: {len(session_info['amenities'])}, Images: {session_info['images_captured']}")
+
+            elif data.get("type") == "finalize":
+                # Get aggregated results
+                final_result = yolo_service.finalize_session(session_id)
+
+                await websocket.send_json({
+                    "type": "finalized",
+                    "data": final_result
+                })
+
+                print(f"✅ Session {session_id} finalized - {frame_count} frames, {len(final_result['amenities'])} amenities")
+                break
+
+            elif data.get("type") == "ping":
+                # Keep-alive ping
+                await websocket.send_json({"type": "pong"})
+
+    except WebSocketDisconnect:
+        print(f"📱 Phone disconnected after {frame_count} frames")
+        if session_id:
+            yolo_service.delete_session(session_id)
+    except Exception as e:
+        print(f"❌ WebSocket error: {e}")
+        if session_id:
+            yolo_service.delete_session(session_id)
+        try:
+            await websocket.send_json({"error": str(e)})
+        except:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except:
+            pass
+
+
+# ============================================================================
+# SCAN SESSION ENDPOINTS
+# ============================================================================
+
+@app.get("/api/scan/session/{session_id}")
+async def get_scan_session(session_id: str):
+    """
+    Get current scan session data
+
+    Returns aggregated amenities, room detections, and image count
+    """
+    try:
+        session_data = yolo_service.get_session(session_id)
+        return {"success": True, "data": session_data}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/api/scan/finalize/{session_id}")
+async def finalize_scan_session(session_id: str):
+    """
+    Finalize scan session and get complete results
+
+    Returns:
+    - All detected amenities
+    - Room breakdown (bedrooms, bathrooms, etc.)
+    - Property type inference
+    - Top 20 detected objects with counts
+    - Images captured (every 10 frames with base64)
+    - Summary statistics
+
+    Use this data to create listing with pricing endpoint
+    """
+    try:
+        final_result = yolo_service.finalize_session(session_id)
+
+        if "error" in final_result:
+            raise HTTPException(status_code=404, detail=final_result["error"])
+
+        # Clean up session after retrieving
+        yolo_service.delete_session(session_id)
+
+        return {
+            "success": True,
+            "data": final_result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # MONITORING & HEALTH
 # ============================================================================
 
@@ -1196,12 +1368,37 @@ async def health_check():
     }
 
 
+@app.get("/phone_test.html")
+async def phone_test():
+    """Serve phone camera test page (requires HTTPS for video)"""
+    return FileResponse("phone_test.html")
+
+
+@app.get("/phone_test_simple.html")
+async def phone_test_simple():
+    """Serve simple photo upload test page (works over HTTP)"""
+    return FileResponse("phone_test_simple.html")
+
+
+@app.get("/camera_scan.html")
+async def camera_scan():
+    """Serve real-time video scanning page (requires HTTPS)"""
+    return FileResponse("camera_scan.html")
+
+
+@app.get("/camera_test_debug.html")
+async def camera_test_debug():
+    """Serve camera debug/diagnostic page"""
+    return FileResponse("camera_test_debug.html")
+
+
 @app.get("/")
 async def root():
     return {
         "app": "VIBE - AI-Native Home Sharing",
         "version": "1.0.0",
-        "docs": "/docs"
+        "docs": "/docs",
+        "phone_test": "/phone_test.html"
     }
 
 

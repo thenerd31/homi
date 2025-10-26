@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VIBE Property Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: oklch(0.97 0 0);
+            color: oklch(0.145 0 0);
+            overflow: hidden;
+        }
+
+        .container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: oklch(0.145 0 0);
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            background: oklch(1 0 0 / 95%);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid oklch(0.922 0 0);
+            box-shadow: 0 4px 6px oklch(0 0 0 / 10%);
+        }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid oklch(0.922 0 0);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-connected {
+            background: oklch(0.6 0.15 145);
+        }
+
+        .status-disconnected {
+            background: oklch(0.577 0.245 27.325);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-label {
+            color: oklch(0.556 0 0);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+
+        .info-value {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .guidance {
+            margin-top: 12px;
+            padding: 8px 12px;
+            background: oklch(0.97 0 0);
+            border-radius: 6px;
+            font-size: 13px;
+            color: oklch(0.145 0 0);
+        }
+
+        .amenities-panel {
+            position: absolute;
+            bottom: 200px;
+            left: 16px;
+            right: 16px;
+            max-height: 100px;
+            overflow-y: auto;
+            background: oklch(1 0 0 / 95%);
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid oklch(0.922 0 0);
+            box-shadow: 0 4px 6px oklch(0 0 0 / 10%);
+        }
+
+        .amenities-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: oklch(0.556 0 0);
+            margin-bottom: 8px;
+        }
+
+        .amenities-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .amenity-tag {
+            padding: 4px 10px;
+            background: oklch(0.97 0 0);
+            border: 1px solid oklch(0.922 0 0);
+            border-radius: 6px;
+            font-size: 12px;
+            color: oklch(0.145 0 0);
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 100px;
+            left: 16px;
+            right: 16px;
+            background: oklch(1 0 0 / 95%);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid oklch(0.922 0 0);
+            box-shadow: 0 4px 6px oklch(0 0 0 / 10%);
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        button {
+            padding: 14px 28px;
+            font-size: 15px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex: 1;
+            max-width: 200px;
+        }
+
+        .btn-primary {
+            background: oklch(0.205 0 0);
+            color: oklch(0.985 0 0);
+        }
+
+        .btn-primary:active {
+            background: oklch(0.145 0 0);
+        }
+
+        .btn-secondary {
+            background: oklch(0.97 0 0);
+            color: oklch(0.205 0 0);
+            border: 1px solid oklch(0.922 0 0);
+        }
+
+        .btn-secondary:active {
+            background: oklch(0.922 0 0);
+        }
+
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        button[style*="display: none"] {
+            display: none !important;
+        }
+
+        .error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: oklch(1 0 0 / 95%);
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid oklch(0.577 0.245 27.325);
+            max-width: 320px;
+            text-align: center;
+        }
+
+        .error-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: oklch(0.577 0.245 27.325);
+        }
+
+        .error-text {
+            font-size: 14px;
+            color: oklch(0.556 0 0);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="video-wrapper">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+
+            <div class="info-panel">
+                <div class="status-row">
+                    <span class="status-indicator status-disconnected" id="status-dot"></span>
+                    <strong id="status-text">Initializing...</strong>
+                </div>
+
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Photos</span>
+                        <span class="info-value" id="photo-count">0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Objects</span>
+                        <span class="info-value" id="object-count">0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Room</span>
+                        <span class="info-value" id="room-type">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Amenities</span>
+                        <span class="info-value" id="amenity-count">0</span>
+                    </div>
+                </div>
+
+                <div class="guidance" id="guidance">Point camera at rooms in your property</div>
+            </div>
+
+            <div class="amenities-panel" id="amenities-panel" style="display: none;">
+                <div class="amenities-title">Detected Amenities</div>
+                <div class="amenities-list" id="amenities-list"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="start-btn" class="btn-primary" onclick="startScanning()">Start Scanning</button>
+            <button id="stop-btn" class="btn-secondary" onclick="stopScanning()">Stop</button>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_HOST = window.location.hostname || 'localhost';
+        const BACKEND_PORT = window.location.port || '8000';
+        const PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const WS_URL = `${PROTOCOL}//${BACKEND_HOST}:${BACKEND_PORT}/ws/scan`;
+
+        let ws = null;
+        let video = null;
+        let canvas = null;
+        let ctx = null;
+        let isScanning = false;
+        let frameInterval = null;
+        let photoCaptureInterval = null;
+        let videoWidth = 0;
+        let videoHeight = 0;
+        let sessionId = null;
+        let finalResults = null;
+        let photoCount = 0;
+        let amenityCount = 0;
+
+        window.onload = async () => {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+
+                video.srcObject = stream;
+
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    videoWidth = video.videoWidth;
+                    videoHeight = video.videoHeight;
+
+                    console.log('Camera ready:', videoWidth, 'x', videoHeight);
+                    document.getElementById('guidance').textContent = 'Camera ready. Press Start Scanning';
+                };
+            } catch (err) {
+                console.error('Camera error:', err);
+                showError('Camera Access Required',
+                    'Could not access camera. Please allow camera permissions and ensure you are using HTTPS.');
+            }
+        };
+
+        function startScanning() {
+            if (isScanning) return;
+
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                document.getElementById('status-dot').className = 'status-indicator status-connected';
+                document.getElementById('status-text').textContent = 'Connected';
+                isScanning = true;
+                document.getElementById('start-btn').style.display = 'none';
+                document.getElementById('stop-btn').disabled = false;
+                document.getElementById('stop-btn').style.display = 'block';
+
+                // Real-time YOLO detection (every 500ms for smooth AR overlays)
+                frameInterval = setInterval(() => captureAndSend(false), 500);
+
+                // Photo capture (every 3 seconds - store these images)
+                photoCaptureInterval = setInterval(() => captureAndSend(true), 3000);
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'connected') {
+                    console.log('Server ready:', data.message);
+                    sessionId = data.session_id;
+                    console.log('Session ID:', sessionId);
+                }
+                else if (data.type === 'detection') {
+                    handleDetection(data);
+                }
+                else if (data.type === 'finalized') {
+                    handleFinalResults(data.data);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('guidance').textContent = 'Connection error';
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket closed');
+                document.getElementById('status-dot').className = 'status-indicator status-disconnected';
+                document.getElementById('status-text').textContent = 'Disconnected';
+                stopScanning();
+            };
+        }
+
+        function stopScanning() {
+            isScanning = false;
+
+            if (frameInterval) {
+                clearInterval(frameInterval);
+                frameInterval = null;
+            }
+
+            if (photoCaptureInterval) {
+                clearInterval(photoCaptureInterval);
+                photoCaptureInterval = null;
+            }
+
+            // Send finalize message before closing
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Finalizing scan session...');
+                ws.send(JSON.stringify({ type: 'finalize' }));
+
+                // Don't close immediately - wait for finalized response
+                // WebSocket will close after receiving finalized message
+            } else {
+                document.getElementById('start-btn').disabled = false;
+                document.getElementById('start-btn').style.display = 'block';
+                document.getElementById('stop-btn').disabled = true;
+                document.getElementById('stop-btn').style.display = 'none';
+            }
+        }
+
+        function captureAndSend(storeImage = false) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+            // Flash effect when capturing photo
+            if (storeImage) {
+                const flash = document.createElement('div');
+                flash.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: white;
+                    opacity: 0.7;
+                    z-index: 999;
+                    pointer-events: none;
+                `;
+                document.querySelector('.video-wrapper').appendChild(flash);
+                setTimeout(() => flash.remove(), 100);
+
+                photoCount++;
+                document.getElementById('photo-count').textContent = photoCount;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob((blob) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    ws.send(JSON.stringify({
+                        type: 'frame',
+                        image: reader.result,
+                        store_image: storeImage
+                    }));
+                };
+                reader.readAsDataURL(blob);
+            }, 'image/jpeg', 0.8);
+        }
+
+        function handleDetection(data) {
+            document.getElementById('room-type').textContent = data.room_type || '-';
+            document.getElementById('object-count').textContent = data.stats?.total_objects || 0;
+            document.getElementById('guidance').textContent = data.guidance || '';
+
+            if (data.amenities && data.amenities.length > 0) {
+                amenityCount = data.amenities.length;
+                document.getElementById('amenity-count').textContent = amenityCount;
+
+                const panel = document.getElementById('amenities-panel');
+                const list = document.getElementById('amenities-list');
+
+                panel.style.display = 'block';
+                list.innerHTML = data.amenities
+                    .map(a => `<span class="amenity-tag">${a}</span>`)
+                    .join('');
+            }
+
+            if (data.objects && data.objects.length > 0) {
+                drawBoundingBoxes(data.objects);
+            }
+        }
+
+        function drawBoundingBoxes(objects) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const scaleX = canvas.width / videoWidth;
+            const scaleY = canvas.height / videoHeight;
+
+            objects.forEach(obj => {
+                const [x1, y1, x2, y2] = obj.bbox;
+                const conf = obj.confidence;
+                const label = obj.class;
+
+                const sx1 = x1 * scaleX;
+                const sy1 = y1 * scaleY;
+                const sw = (x2 - x1) * scaleX;
+                const sh = (y2 - y1) * scaleY;
+
+                let color = 'oklch(0.6 0.15 145)';
+                if (conf < 0.7) color = 'oklch(0.828 0.189 84.429)';
+                if (conf < 0.5) color = 'oklch(0.646 0.222 41.116)';
+
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(sx1, sy1, sw, sh);
+
+                ctx.fillStyle = color;
+                const labelText = `${label} ${(conf * 100).toFixed(0)}%`;
+                ctx.font = 'bold 14px -apple-system, sans-serif';
+                const textWidth = ctx.measureText(labelText).width;
+                ctx.fillRect(sx1, sy1 - 22, textWidth + 12, 22);
+
+                ctx.fillStyle = 'oklch(1 0 0)';
+                ctx.fillText(labelText, sx1 + 6, sy1 - 6);
+            });
+        }
+
+        function handleFinalResults(results) {
+            console.log('Final scan results:', results);
+            finalResults = results;
+
+            // Close WebSocket
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+
+            // Stop scanning
+            if (frameInterval) {
+                clearInterval(frameInterval);
+                frameInterval = null;
+            }
+
+            if (photoCaptureInterval) {
+                clearInterval(photoCaptureInterval);
+                photoCaptureInterval = null;
+            }
+
+            isScanning = false;
+
+            // Show results
+            alert(`Scan Complete!\n\nProperty: ${results.summary.property_type}\nBedrooms: ${results.summary.bedrooms}\nBathrooms: ${results.summary.bathrooms}\nAmenities: ${results.amenities.length}\nImages: ${results.images.length}\n\nCheck console for full JSON`);
+
+            // Reset buttons
+            document.getElementById('start-btn').disabled = false;
+            document.getElementById('start-btn').style.display = 'block';
+            document.getElementById('stop-btn').disabled = true;
+            document.getElementById('stop-btn').style.display = 'none';
+
+            // You can now POST this JSON to your listing endpoint
+            // Example:
+            // fetch('/api/create-listing', {
+            //     method: 'POST',
+            //     headers: { 'Content-Type': 'application/json' },
+            //     body: JSON.stringify(finalResults)
+            // });
+        }
+
+        function showError(title, message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = `
+                <div class="error-title">${title}</div>
+                <div class="error-text">${message}</div>
+            `;
+            document.querySelector('.video-wrapper').appendChild(errorDiv);
+        }
+    </script>
+</body>
+</html>

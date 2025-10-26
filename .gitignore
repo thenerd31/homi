@@ -46,3 +46,7 @@ coverage/
 *.bak
 *.tmp
 .cache/
+
+# SSL certificates (local HTTPS testing)
+backend/certs/
+*.pem
