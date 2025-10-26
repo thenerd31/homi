@@ -593,7 +593,7 @@ curl -X POST http://localhost:8000/api/search/conversation \
 ## 📞 Contact & Links
 
 - **Demo Site:** http://localhost:3000
-- **GitHub:** https://github.com/thenerd31/vibe
+- **GitHub:** https://github.com/thenerd31/homi
 - **API Docs:** http://localhost:8000/docs
 - **Testing Guide:** `/TESTING_GUIDE.md`
 
