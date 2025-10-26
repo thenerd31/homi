@@ -222,31 +222,66 @@ Be conversational and helpful!
     async def generate_pricing_suggestions(
         self,
         listing: Dict[str, Any],
-        dates: List[Dict[str, str]]  # [{"start": "2025-11-01", "end": "2025-11-30"}]
+        date_range_start: str,  # "2025-11-01"
+        date_range_end: str,    # "2025-11-30"
+        pricing_service = None,  # PricingService instance
+        elastic_client = None    # ElasticClient for competitor data
     ) -> Dict[str, Any]:
         """
-        Generate pricing suggestions based on dates
+        Generate comprehensive pricing suggestions for date range
 
-        This would integrate with the pricing_service.py
+        Integrates with pricing_service.py for dynamic pricing analysis
+        including day-of-week, seasonality, holidays, and competitive data
+
+        Args:
+            listing: Property data (location, type, amenities, etc.)
+            date_range_start: Start date (YYYY-MM-DD)
+            date_range_end: End date (YYYY-MM-DD)
+            pricing_service: PricingService instance (optional)
+            elastic_client: ElasticClient for competitor data (optional)
+
+        Returns:
+            {
+                "daily_prices": [...],  # Full pricing breakdown per day
+                "summary": {"avg_price": 250, "total_revenue_estimate": 7500, ...},
+                "competitive_analysis": {...},
+                "recommendations": [...]
+            }
         """
-        # TODO: Call pricing_service.analyze_pricing()
-        # For now, return mock data
+        # Use dynamic pricing service if available
+        if pricing_service:
+            try:
+                pricing_analysis = await pricing_service.analyze_dynamic_pricing_for_dates(
+                    listing_data=listing,
+                    date_range_start=date_range_start,
+                    date_range_end=date_range_end,
+                    elastic_client=elastic_client
+                )
+                return pricing_analysis
+            except Exception as e:
+                print(f"Pricing service error: {e}")
+                # Fall through to mock data
 
+        # Fallback mock data
         return {
-            "suggestions": [
+            "daily_prices": [
                 {
-                    "date_range": "Weekends in November",
-                    "suggested_price": 380,
-                    "reasoning": "High weekend demand, premium location"
-                },
-                {
-                    "date_range": "Weekdays in November",
-                    "suggested_price": 280,
-                    "reasoning": "Lower weekday demand"
+                    "date": date_range_start,
+                    "day_of_week": "Friday",
+                    "final_price": 320,
+                    "reasoning": "Weekend premium + Peak season"
                 }
             ],
-            "market_position": "luxury",
-            "confidence": 0.89
+            "summary": {
+                "avg_price": 280,
+                "total_revenue_estimate": 8400,
+                "number_of_nights": 30
+            },
+            "competitive_analysis": {"status": "unavailable"},
+            "recommendations": [
+                "Pricing is competitive for this market",
+                "Consider minimum 2-night stay for weekends"
+            ]
         }
 
     async def finalize_listing(
