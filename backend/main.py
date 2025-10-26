@@ -21,13 +21,15 @@ try:
 except ImportError:
     print("⚠ Phoenix not installed - running without observability")
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
 import httpx
 from dotenv import load_dotenv
+import base64
 
 # Import our modules
 # from services.search_service import SearchService  # Placeholder service
@@ -43,6 +45,8 @@ from services.seller_chatbot_service import SellerChatbotService
 from services.image_filter_service import ImageFilterService
 from services.preference_analysis_service import PreferenceAnalysisService
 from services.vapi_service import VapiService, get_vapi_service
+from services.geocoding_service import GeocodingService
+from services.yolo_service import YOLOService
 # Fetch.ai agents are separate processes - see agents/fetch_agents/
 from utils.elastic_client import ElasticClient
 from utils.supabase_client import SupabaseClient
@@ -80,6 +84,8 @@ seller_chatbot_service = SellerChatbotService()
 image_filter_service = ImageFilterService()
 preference_analysis_service = PreferenceAnalysisService()
 vapi_service = get_vapi_service()
+geocoding_service = GeocodingService()
+yolo_service = YOLOService(model_path="yolov8n.pt")
 elastic_client = ElasticClient()
 supabase_client = SupabaseClient()
 # arize_logger = ArizeLogger()  # Placeholder
@@ -556,6 +562,11 @@ class HumanizePreferencesRequest(BaseModel):
     """Request to convert raw preferences to human-readable text"""
     preferences: Dict[str, Any]
 
+class AnalyzeScanRequest(BaseModel):
+    """Request to analyze YOLO scan data and generate listing"""
+    scan_data: Dict[str, Any]
+    location: str
+
 @app.post("/api/filter-photos")
 async def filter_photos(request: ImageFilterRequest):
     """
@@ -679,6 +690,134 @@ Example output: "contemporary architectural design, luxury modern spaces, natura
         }
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/analyze-scan")
+async def analyze_scan(request: AnalyzeScanRequest):
+    """
+    🤖 AI Analysis of YOLO Scan Data
+
+    Sponsor: Anthropic (Claude), Groq (title generation), Pricing Service
+
+    Takes raw YOLO scan data and generates:
+    - Compelling listing title from detected objects
+    - Pricing suggestion based on amenities and location
+    - Mapped amenities for UI
+    """
+    try:
+        scan_data = request.scan_data
+        location = request.location
+
+        # Extract key info from scan
+        amenities_detected = scan_data.get("amenities_detected", [])
+        property_type = scan_data.get("property_type", "apartment")
+        bedrooms = scan_data.get("bedrooms", 1)
+        bathrooms = scan_data.get("bathrooms", 1)
+        objects_detected = scan_data.get("objects_detected", {})
+        room_breakdown = scan_data.get("room_breakdown", {})
+
+        print(f"🔍 Analyzing scan: {property_type}, {bedrooms}BR/{bathrooms}BA")
+        print(f"📋 Amenities detected: {amenities_detected}")
+        print(f"🏠 Room breakdown: {room_breakdown}")
+
+        # Step 1: Generate compelling title with Groq
+        title_prompt = f"""Generate a short, compelling Airbnb listing title (max 8 words) for this property:
+
+Property Type: {property_type}
+Bedrooms: {bedrooms}
+Bathrooms: {bathrooms}
+Location: {location}
+Detected Amenities: {', '.join(amenities_detected[:10])}
+Rooms Scanned: {', '.join(room_breakdown.keys())}
+
+Guidelines:
+- Focus on the most appealing features
+- Be specific and descriptive
+- Include location neighborhood if in title (SF → "Downtown SF", "SoMa", etc.)
+- Make it sound inviting
+- Keep it under 8 words
+
+Return ONLY the title, nothing else."""
+
+        title_response = await groq_service.generate_completion(
+            prompt=title_prompt,
+            temperature=0.7,
+            max_tokens=50
+        )
+
+        generated_title = title_response.strip().strip('"')
+        print(f"📝 Generated title: {generated_title}")
+
+        # Step 2: Map YOLO amenities to UI amenity IDs
+        # UI expects: tv, kitchen, projector, laundry, pool, fitness, parking
+        amenity_mapping = {
+            "TV": "tv",
+            "entertainment": "tv",
+            "full kitchen": "kitchen",
+            "kitchen": "kitchen",
+            "cooking facilities": "kitchen",
+            "kitchen appliances": "kitchen",
+            "Laundry": "laundry",
+            "washing machine": "laundry",
+            "Swimming Pool": "pool",
+            "pool": "pool",
+            "Gym": "fitness",
+            "fitness": "fitness",
+            "workout": "fitness",
+            "Parking": "parking",
+            "parking": "parking",
+            "car": "parking",
+            "garage": "parking",
+        }
+
+        ui_amenities = set()
+        for amenity in amenities_detected:
+            amenity_lower = amenity.lower()
+            # Check for exact matches first
+            if amenity in amenity_mapping:
+                ui_amenities.add(amenity_mapping[amenity])
+            # Then check if any mapping key is in the amenity string
+            else:
+                for key, value in amenity_mapping.items():
+                    if key.lower() in amenity_lower:
+                        ui_amenities.add(value)
+                        break
+
+        mapped_amenities = list(ui_amenities)
+        print(f"🏷️ Mapped to UI amenities: {mapped_amenities}")
+
+        # Step 3: Get AI pricing suggestion
+        pricing_data = await pricing_service.analyze_pricing(
+            location=location,
+            property_type=property_type,
+            amenities=amenities_detected,
+            bedrooms=bedrooms,
+            bathrooms=bathrooms
+        )
+
+        suggested_price = pricing_data.get("suggested_price", 168)
+        print(f"💰 Suggested price: ${suggested_price}/night")
+
+        return {
+            "success": True,
+            "title": generated_title,
+            "suggested_price": suggested_price,
+            "amenities": mapped_amenities,
+            "pricing_data": pricing_data,
+            "property_analysis": {
+                "property_type": property_type,
+                "bedrooms": bedrooms,
+                "bathrooms": bathrooms,
+                "rooms_detected": len(room_breakdown),
+                "total_amenities": len(amenities_detected)
+            }
+        }
+
+    except Exception as e:
+        print(f"❌ Error analyzing scan: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1123,6 +1262,229 @@ async def vapi_get_listing_context(listing_id: str):
 
 
 # ============================================================================
+# REAL-TIME YOLO DETECTION (WebSocket)
+# ============================================================================
+
+@app.websocket("/ws/scan")
+async def websocket_scan(websocket: WebSocket):
+    """
+    🎥 Real-time YOLO object detection via WebSocket with session management
+
+    Use case: Phone camera streaming for property scanning
+
+    Protocol:
+    - Client sends: {"type": "start"} to begin session
+    - Client sends: {"type": "frame", "image": "base64_jpeg_data"}
+    - Server responds: {"type": "detection", "objects": [...], "amenities": [...]}
+    - Client sends: {"type": "finalize"} to get aggregated results
+    """
+    await websocket.accept()
+    session_id = None
+    frame_count = 0
+
+    try:
+        print("📱 Phone connected to WebSocket")
+
+        # Create session
+        session_id = yolo_service.create_session()
+
+        await websocket.send_json({
+            "type": "connected",
+            "session_id": session_id,
+            "message": "Ready to scan! Point camera at rooms in your property"
+        })
+
+        while True:
+            # Receive message from phone
+            data = await websocket.receive_json()
+
+            if data.get("type") == "frame":
+                frame_count += 1
+
+                # Decode base64 image
+                image_base64 = data.get("image", "")
+                if not image_base64:
+                    await websocket.send_json({"error": "No image data"})
+                    continue
+
+                # Check if this should be stored as a photo
+                store_image = data.get("store_image", False)
+
+                # Remove data URL prefix if present
+                image_data_uri = image_base64
+                if "," in image_base64:
+                    image_base64 = image_base64.split(",")[1]
+
+                image_bytes = base64.b64decode(image_base64)
+
+                # Run YOLO detection
+                result = await yolo_service.detect_realtime(image_bytes)
+
+                # Add to session (stores image only when store_image=True)
+                yolo_service.add_frame_to_session(
+                    session_id,
+                    result,
+                    image_data_uri if store_image else None,
+                    store_image
+                )
+
+                # Send results back to phone
+                await websocket.send_json({
+                    "type": "detection",
+                    "frame": frame_count,
+                    "session_id": session_id,
+                    **result
+                })
+
+                # Log photo captures and periodic updates
+                if store_image:
+                    session_info = yolo_service.get_session(session_id)
+                    print(f"📸 Photo captured! Total: {session_info['images_captured']} images, Room: {result.get('room_type')}")
+                elif frame_count % 20 == 0:
+                    session_info = yolo_service.get_session(session_id)
+                    print(f"🔄 Frame {frame_count} - Amenities: {len(session_info['amenities'])}, Images: {session_info['images_captured']}")
+
+            elif data.get("type") == "finalize":
+                # Get aggregated results
+                final_result = yolo_service.finalize_session(session_id)
+
+                await websocket.send_json({
+                    "type": "finalized",
+                    "data": final_result
+                })
+
+                print(f"✅ Session {session_id} finalized - {frame_count} frames, {len(final_result['amenities'])} amenities")
+                break
+
+            elif data.get("type") == "ping":
+                # Keep-alive ping
+                await websocket.send_json({"type": "pong"})
+
+    except WebSocketDisconnect:
+        print(f"📱 Phone disconnected after {frame_count} frames")
+        if session_id:
+            yolo_service.delete_session(session_id)
+    except Exception as e:
+        print(f"❌ WebSocket error: {e}")
+        if session_id:
+            yolo_service.delete_session(session_id)
+        try:
+            await websocket.send_json({"error": str(e)})
+        except:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except:
+            pass
+
+
+# ============================================================================
+# SCAN SESSION ENDPOINTS
+# ============================================================================
+
+@app.get("/api/scan/session/{session_id}")
+async def get_scan_session(session_id: str):
+    """
+    Get current scan session data
+
+    Returns aggregated amenities, room detections, and image count
+    """
+    try:
+        session_data = yolo_service.get_session(session_id)
+        return {"success": True, "data": session_data}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/api/scan/finalize/{session_id}")
+async def finalize_scan_session(session_id: str):
+    """
+    Finalize scan session and get complete results
+
+    Returns:
+    - All detected amenities
+    - Room breakdown (bedrooms, bathrooms, etc.)
+    - Property type inference
+    - Top 20 detected objects with counts
+    - Images captured (every 10 frames with base64)
+    - Summary statistics
+
+    Use this data to create listing with pricing endpoint
+    """
+    try:
+        final_result = yolo_service.finalize_session(session_id)
+
+        if "error" in final_result:
+            raise HTTPException(status_code=404, detail=final_result["error"])
+
+        # DON'T delete session yet - keep it for frontend to retrieve
+        # yolo_service.delete_session(session_id)
+
+        return {
+            "success": True,
+            "data": final_result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Temporary storage for scan results (cross-origin workaround)
+scan_results_cache = {}
+
+@app.post("/api/scan/store-temp/{session_id}")
+async def store_temp_scan(session_id: str, scan_data: Dict[str, Any]):
+    """
+    Temporarily store scan results for cross-origin access
+
+    camera_scan.html (port 8000) can't share localStorage with frontend (port 3000),
+    so we store the data here temporarily for the frontend to fetch.
+    """
+    scan_results_cache[session_id] = scan_data
+    print(f"💾 Stored scan data for session {session_id}")
+    return {"success": True, "message": "Scan data stored"}
+
+
+@app.get("/api/scan/retrieve/{session_id}")
+async def retrieve_temp_scan(session_id: str):
+    """
+    Retrieve temporarily stored scan results
+
+    Frontend calls this with the session_id from URL params to get the scan data.
+    """
+    if session_id in scan_results_cache:
+        data = scan_results_cache[session_id]
+        print(f"📤 Retrieved scan data for session {session_id}")
+
+        # Clean up after retrieval
+        del scan_results_cache[session_id]
+
+        # Also clean up YOLO session if it still exists
+        yolo_service.delete_session(session_id)
+
+        return {
+            "success": True,
+            "data": data
+        }
+    else:
+        # Try to get from YOLO service sessions
+        try:
+            session_data = yolo_service.get_session(session_id)
+            if "error" not in session_data:
+                # Finalize and return
+                final_result = yolo_service.finalize_session(session_id)
+                yolo_service.delete_session(session_id)
+                return {
+                    "success": True,
+                    "data": final_result
+                }
+        except:
+            pass
+
+        raise HTTPException(status_code=404, detail="Scan session not found or expired")
+
+
+# ============================================================================
 # MONITORING & HEALTH
 # ============================================================================
 
@@ -1237,6 +1599,12 @@ async def phone_test():
 async def phone_test_simple():
     """Serve simple photo upload test page (works over HTTP)"""
     return FileResponse("phone_test_simple.html")
+
+
+@app.get("/camera_scan.html")
+async def camera_scan():
+    """Serve real-time camera scanning page with YOLO object detection"""
+    return FileResponse("camera_scan.html")
 
 
 @app.get("/")

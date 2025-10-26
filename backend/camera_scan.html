@@ -533,22 +533,35 @@
 
             isScanning = false;
 
-            // Show results
-            alert(`Scan Complete!\n\nProperty: ${results.summary.property_type}\nBedrooms: ${results.summary.bedrooms}\nBathrooms: ${results.summary.bathrooms}\nAmenities: ${results.amenities.length}\nImages: ${results.images.length}\n\nCheck console for full JSON`);
+            // Store results temporarily on backend (not localStorage due to CORS)
+            // Instead, redirect with session_id so frontend can fetch from backend
+            const sessionId = results.session_id;
 
-            // Reset buttons
-            document.getElementById('start-btn').disabled = false;
-            document.getElementById('start-btn').style.display = 'block';
-            document.getElementById('stop-btn').disabled = true;
-            document.getElementById('stop-btn').style.display = 'none';
+            // Show completion message
+            const message = `Scan Complete!\n\n` +
+                `Property: ${results.summary?.property_type || 'Unknown'}\n` +
+                `Bedrooms: ${results.summary?.bedrooms || 0}\n` +
+                `Bathrooms: ${results.summary?.bathrooms || 0}\n` +
+                `Amenities: ${results.amenities?.length || 0}\n` +
+                `Images: ${results.images?.length || 0}\n\n` +
+                `Redirecting to listing creation...`;
 
-            // You can now POST this JSON to your listing endpoint
-            // Example:
-            // fetch('/api/create-listing', {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify(finalResults)
-            // });
+            alert(message);
+
+            // Store full scan data in backend's memory temporarily
+            // Then redirect to review page with session_id
+            fetch(`http://localhost:8000/api/scan/store-temp/${sessionId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(results)
+            }).then(() => {
+                // Redirect to Next.js review page with session_id
+                window.location.href = `http://localhost:3000/sell/review?scan_session=${sessionId}`;
+            }).catch(err => {
+                console.error('Error storing scan data:', err);
+                // Still redirect with session_id, review page can fetch it
+                window.location.href = `http://localhost:3000/sell/review?scan_session=${sessionId}`;
+            });
         }
 
         function showError(title, message) {

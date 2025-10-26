@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Menu, X, Glasses, ScanLine, Heart } from 'lucide-react';
+import { Menu, X, ScanLine, Heart } from 'lucide-react';
 import StarIcon from "@mui/icons-material/Star";
 import Image from 'next/image';
 
@@ -91,25 +91,16 @@ export default function SellPage() {
                   Let's Turn Your Place
                 </h2>
                 <h2 className="text-3xl font-semibold leading-tight">
-                  into Stay with <span className="font-melodrame italic">Spectacles</span>
+                  into Stay with <span className="font-melodrame italic">Artificial Intelligence</span>
                 </h2>
               </div>
             </div>
 
             {/* action buttons */}
-            <div className="flex gap-8 pb-8 mx-auto">
+            <div className="flex justify-center pb-8 mx-auto">
               <button
                 type="button"
-                onClick={() => router.push('/sell/create')}
-                className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95"
-                aria-label="Browse listings"
-              >
-                <Glasses className="w-6 h-6 text-white" strokeWidth={2} />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => router.push('/sell/scan')}
+                onClick={() => window.location.href = 'http://localhost:8000/camera_scan.html'}
                 className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95"
                 aria-label="Scan with Phone"
               >

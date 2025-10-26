@@ -10,25 +10,34 @@ export default function SuccessPage() {
   const [listingData, setListingData] = useState<any>(null);
 
   useEffect(() => {
-    // Get listing data from localStorage
+    // Get listing data from localStorage (published listing)
     if (typeof window !== 'undefined') {
-      const storedData = localStorage.getItem('propertyData');
-      if (storedData) {
-        setListingData(JSON.parse(storedData));
+      const publishedData = localStorage.getItem('publishedListing');
+      if (publishedData) {
+        const parsed = JSON.parse(publishedData);
+        console.log('📦 Published listing data:', parsed);
+        setListingData(parsed);
+      } else {
+        // Fallback to old propertyData if publishedListing not found
+        const storedData = localStorage.getItem('propertyData');
+        if (storedData) {
+          setListingData(JSON.parse(storedData));
+        }
       }
     }
   }, []);
 
-  // Sample data - in a real app, this would come from the listing data
+  // Use actual listing data
   const listing = {
     title: listingData?.title || "Penthouse Loft in SF",
     location: listingData?.location || "8375 Fremont St, San Francisco, CA, 00000",
+    price: listingData?.price || 168,
     guests: listingData?.guests || 5,
     bedrooms: listingData?.bedrooms || 1,
+    beds: listingData?.beds || 1,
     bathrooms: listingData?.bathrooms || 1,
     rating: 4.99,
-    // You can add the actual image URL here
-    coverImage: "/api/placeholder/400/600"
+    coverImage: listingData?.coverPhoto || null
   };
 
   return (
@@ -41,10 +50,17 @@ export default function SuccessPage() {
         <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-2xl">
           {/* Listing Image */}
           <div className="relative h-96 bg-gray-700">
-            {/* Placeholder image - replace with actual image */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-gray-500 text-sm">Listing Photo</div>
-            </div>
+            {listing.coverImage ? (
+              <img
+                src={listing.coverImage}
+                alt={listing.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-gray-500 text-sm">Listing Photo</div>
+              </div>
+            )}
 
             {/* Info Overlay */}
             <div className="absolute top-4 left-4 right-4">

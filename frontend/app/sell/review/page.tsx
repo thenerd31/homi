@@ -93,10 +93,64 @@ export default function ReviewPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(0);
+  const [scanDataLoaded, setScanDataLoaded] = useState(false);
+  const [fetchedScanData, setFetchedScanData] = useState<any>(null);
 
-  // Parse initial data from URL params or localStorage (from video upload or scan)
+  // Fetch scan data from backend if scan_session param exists
+  useEffect(() => {
+    const scanSession = searchParams.get('scan_session');
+    console.log('🔍 Checking for scan_session param:', scanSession);
+
+    if (scanSession && !scanDataLoaded) {
+      console.log('📡 Fetching scan data from backend for session:', scanSession);
+
+      fetch(`http://localhost:8000/api/scan/retrieve/${scanSession}`)
+        .then(res => res.json())
+        .then(data => {
+          console.log('✅ Received scan data from backend:', data);
+          if (data.success && data.data) {
+            setFetchedScanData(data.data);
+            setScanDataLoaded(true);
+          }
+        })
+        .catch(err => {
+          console.error('❌ Error fetching scan data:', err);
+          setScanDataLoaded(true); // Mark as loaded even if error to prevent retry
+        });
+    }
+  }, [searchParams, scanDataLoaded]);
+
+  // Parse initial data from URL params, fetched scan data, or localStorage
   const getInitialData = () => {
-    // Try to get data from URL params first
+    // Priority 1: Use fetchedScanData if available
+    if (fetchedScanData) {
+      console.log('🎯 Using fetched scan data:', fetchedScanData);
+      return {
+        title: '',
+        location: '8375 Fremont St, San Francisco, CA, 00000',
+        guests: Math.max((fetchedScanData.summary?.bedrooms || 1) * 2, 2),
+        bedrooms: fetchedScanData.summary?.bedrooms || 1,
+        beds: fetchedScanData.summary?.bedrooms || 1,
+        bathrooms: fetchedScanData.summary?.bathrooms || 1,
+        amenities: fetchedScanData.amenities || [],
+        price: 168,
+        photos: fetchedScanData.images ? fetchedScanData.images.map((img: any) => img.image) : [],
+        fromScan: true,
+        scanData: {
+          amenities_detected: fetchedScanData.amenities || [],
+          photos: fetchedScanData.images ? fetchedScanData.images.map((img: any) => img.image) : [],
+          property_type: fetchedScanData.summary?.property_type || 'apartment',
+          bedrooms: fetchedScanData.summary?.bedrooms || 1,
+          bathrooms: fetchedScanData.summary?.bathrooms || 1,
+          guests: Math.max((fetchedScanData.summary?.bedrooms || 1) * 2, 2),
+          beds: fetchedScanData.summary?.bedrooms || 1,
+          objects_detected: fetchedScanData.objects_detected || {},
+          room_breakdown: fetchedScanData.room_breakdown || {},
+        },
+      };
+    }
+
+    // Priority 2: Try to get data from URL params
     const urlTitle = searchParams.get('title');
     const urlLocation = searchParams.get('location');
     const urlGuests = searchParams.get('guests');
@@ -118,17 +172,34 @@ export default function ReviewPage() {
         amenities: urlAmenities ? urlAmenities.split(',') : ['tv', 'kitchen', 'projector'],
         price: urlPrice ? parseInt(urlPrice) : 168,
         photos: [],
+        fromScan: false,
       };
     }
 
     // Otherwise try localStorage
     if (typeof window !== 'undefined') {
+      // Debug: Log ALL localStorage keys
+      console.log('🔑 All localStorage keys:', Object.keys(localStorage));
+      console.log('📦 localStorage contents:');
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
+          console.log(`  ${key}:`, localStorage.getItem(key)?.substring(0, 100) + '...');
+        }
+      }
+
       // Try detected_listing from scan page first
       const detectedListing = localStorage.getItem('detected_listing');
+      console.log('🔍 detected_listing value:', detectedListing ? 'EXISTS' : 'NULL/UNDEFINED');
+
       if (detectedListing) {
         const parsed = JSON.parse(detectedListing);
+        console.log('🔍 DEBUG: Raw scan data from localStorage:', parsed);
+        console.log('📸 Photos found:', parsed.photos?.length || 0);
+        console.log('🏷️ Amenities detected:', parsed.amenities_detected || []);
+
         return {
-          title: parsed.title || 'Sunny Studio in Downtown SF',
+          title: parsed.title || '',
           location: parsed.location || '8375 Fremont St, San Francisco, CA, 00000',
           guests: parsed.guests || 6,
           bedrooms: parsed.bedrooms || 2,
@@ -137,6 +208,8 @@ export default function ReviewPage() {
           amenities: parsed.amenities_detected || parsed.amenities || ['tv', 'kitchen', 'projector'],
           price: parsed.suggested_price || parsed.price || 168,
           photos: parsed.photos || [],
+          fromScan: true,
+          scanData: parsed, // Keep full scan data for AI analysis
         };
       }
 
@@ -154,6 +227,7 @@ export default function ReviewPage() {
           amenities: parsed.amenities || ['tv', 'kitchen', 'projector'],
           price: parsed.price || 168,
           photos: parsed.photos || [],
+          fromScan: false,
         };
       }
     }
@@ -169,6 +243,7 @@ export default function ReviewPage() {
       amenities: ['tv', 'kitchen', 'projector'],
       price: 168,
       photos: [],
+      fromScan: false,
     };
   };
 
@@ -177,6 +252,8 @@ export default function ReviewPage() {
   // Property Information (can be updated from video analysis)
   const [propertyTitle, setPropertyTitle] = useState(initialData.title);
   const [propertyLocation, setPropertyLocation] = useState(initialData.location);
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [tempLocation, setTempLocation] = useState(initialData.location);
 
   // Step 1: Room Information
   const [roomData, setRoomData] = useState<RoomData>({
@@ -212,11 +289,16 @@ export default function ReviewPage() {
 
   // Photos
   const [photos, setPhotos] = useState<string[]>(initialData.photos || []);
+  const [coverPhotoIndex, setCoverPhotoIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Chat input and messages
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+
+  // AI analysis loading state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisComplete, setAnalysisComplete] = useState(false);
 
   const incrementRoomValue = (key: keyof RoomData) => {
     setRoomData(prev => ({ ...prev, [key]: prev[key] + 1 }));
@@ -244,6 +326,22 @@ export default function ReviewPage() {
 
   const removePhoto = (index: number) => {
     setPhotos(prev => prev.filter((_, i) => i !== index));
+    // If we removed the cover photo, reset to first photo
+    if (index === coverPhotoIndex) {
+      setCoverPhotoIndex(0);
+    } else if (index < coverPhotoIndex) {
+      // Adjust cover index if we removed a photo before it
+      setCoverPhotoIndex(prev => prev - 1);
+    }
+  };
+
+  const setCoverPhoto = (index: number) => {
+    // Reorder photos array to put selected photo first
+    const newPhotos = [...photos];
+    const [selectedPhoto] = newPhotos.splice(index, 1);
+    newPhotos.unshift(selectedPhoto);
+    setPhotos(newPhotos);
+    setCoverPhotoIndex(0);
   };
 
   // Calendar functions
@@ -371,7 +469,141 @@ export default function ReviewPage() {
     }
   }, [price]);
 
+  // Analyze scan data with AI when fetchedScanData loads
+  useEffect(() => {
+    const analyzeScanData = async () => {
+      console.log('🔄 AI analysis useEffect running...');
+      console.log('  fetchedScanData:', !!fetchedScanData);
+      console.log('  analysisComplete:', analysisComplete);
+      console.log('  isAnalyzing:', isAnalyzing);
+
+      // Only run if we have fetched scan data and haven't analyzed yet
+      if (!fetchedScanData || analysisComplete || isAnalyzing) {
+        console.log('⏭️ Skipping AI analysis (conditions not met)');
+        return;
+      }
+
+      // Prepare scan data in the format the backend expects
+      const scanData = {
+        amenities_detected: fetchedScanData.amenities || [],
+        property_type: fetchedScanData.summary?.property_type || 'apartment',
+        bedrooms: fetchedScanData.summary?.bedrooms || 1,
+        bathrooms: fetchedScanData.summary?.bathrooms || 1,
+        guests: Math.max((fetchedScanData.summary?.bedrooms || 1) * 2, 2),
+        beds: fetchedScanData.summary?.bedrooms || 1,
+        objects_detected: fetchedScanData.objects_detected || {},
+        room_breakdown: fetchedScanData.room_breakdown || {},
+      };
+
+      console.log('🤖 Starting AI analysis of scan data...');
+      console.log('📦 Scan data being sent:', scanData);
+      setIsAnalyzing(true);
+
+      try {
+        const response = await fetch('http://localhost:8000/api/analyze-scan', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            scan_data: scanData,
+            location: propertyLocation,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to analyze scan data');
+        }
+
+        const data = await response.json();
+        console.log('✅ AI analysis complete:', data);
+        console.log('  Title:', data.title);
+        console.log('  Price:', data.suggested_price);
+        console.log('  Amenities:', data.amenities);
+
+        // Update state with AI-generated content
+        if (data.title && data.title !== '') {
+          console.log('📝 Updating title from:', propertyTitle, 'to:', data.title);
+          setPropertyTitle(data.title);
+        } else {
+          console.log('⚠️ No title in response or empty');
+        }
+
+        if (data.suggested_price) {
+          console.log('💰 Updating price from:', price, 'to:', data.suggested_price);
+          setPrice(data.suggested_price);
+        } else {
+          console.log('⚠️ No suggested_price in response');
+        }
+
+        if (data.amenities && data.amenities.length > 0) {
+          console.log('🏷️ Updating amenities from:', selectedAmenities, 'to:', data.amenities);
+          setSelectedAmenities(data.amenities);
+        } else {
+          console.log('⚠️ No amenities in response or empty array');
+        }
+
+        setAnalysisComplete(true);
+      } catch (error) {
+        console.error('❌ Error analyzing scan data:', error);
+        if (error instanceof Error) {
+          console.error('  Error message:', error.message);
+          console.error('  Error stack:', error.stack);
+        }
+      } finally {
+        setIsAnalyzing(false);
+      }
+    };
+
+    analyzeScanData();
+  }, [fetchedScanData]); // Run when fetchedScanData loads
+
+  // Update state when fetchedScanData loads
+  useEffect(() => {
+    if (fetchedScanData) {
+      console.log('📸 Updating photos from fetched scan data:', fetchedScanData.images?.length || 0);
+      if (fetchedScanData.images) {
+        const photoUrls = fetchedScanData.images.map((img: any) => img.image);
+        setPhotos(photoUrls);
+      }
+
+      console.log('🏷️ Updating amenities from fetched scan data:', fetchedScanData.amenities);
+      if (fetchedScanData.amenities) {
+        // Will be updated by AI analysis, but set initial values
+        // The AI analysis will map these to UI amenity IDs
+      }
+
+      console.log('🏠 Updating room data from fetched scan data');
+      if (fetchedScanData.summary) {
+        setRoomData({
+          guests: Math.max((fetchedScanData.summary.bedrooms || 1) * 2, 2),
+          bedrooms: fetchedScanData.summary.bedrooms || 1,
+          beds: fetchedScanData.summary.bedrooms || 1,
+          bathrooms: fetchedScanData.summary.bathrooms || 1,
+        });
+      }
+    }
+  }, [fetchedScanData]);
+
   const handlePublish = () => {
+    // Save final listing data to localStorage for success page
+    const publishedListing = {
+      title: propertyTitle,
+      location: propertyLocation,
+      price: price,
+      coverPhoto: photos[0] || null,
+      guests: roomData.guests,
+      bedrooms: roomData.bedrooms,
+      beds: roomData.beds,
+      bathrooms: roomData.bathrooms,
+      amenities: selectedAmenities,
+      availability: startDate && endDate ? {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+      } : null,
+    };
+
+    localStorage.setItem('publishedListing', JSON.stringify(publishedListing));
     router.push('/sell/review/success');
   };
 
@@ -561,7 +793,51 @@ export default function ReviewPage() {
 
         <div className="mb-6">
           <p className="mb-3 font-light">Location</p>
-          <p className="text-gray-400 text-sm mb-4">{propertyLocation} ✏️</p>
+          {isEditingLocation ? (
+            <div className="mb-4">
+              <input
+                type="text"
+                value={tempLocation}
+                onChange={(e) => setTempLocation(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-gray-500 mb-2"
+                placeholder="Enter address..."
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPropertyLocation(tempLocation);
+                    setIsEditingLocation(false);
+                  }}
+                  className="px-4 py-2 bg-white text-black rounded-lg text-sm font-semibold hover:bg-gray-200 transition"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempLocation(propertyLocation);
+                    setIsEditingLocation(false);
+                  }}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm hover:bg-gray-700 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              onClick={() => {
+                setTempLocation(propertyLocation);
+                setIsEditingLocation(true);
+              }}
+              className="text-gray-400 text-sm mb-4 cursor-pointer hover:text-white transition flex items-center gap-2"
+            >
+              <span>{propertyLocation}</span>
+              <span className="text-xs">✏️</span>
+            </div>
+          )}
 
           <PropertyMap location={propertyLocation} className="w-full h-64" />
         </div>
@@ -621,14 +897,28 @@ export default function ReviewPage() {
 
       <div className="mb-6">
         <h2 className="text-lg font-light mb-3">Photos</h2>
-        <p className="text-sm text-gray-400 mb-3">Cover</p>
+        <p className="text-sm text-gray-400 mb-3">Tap a photo to set as cover</p>
         <div className="grid grid-cols-2 gap-3">
           {photos.map((photo, index) => (
-            <div key={index} className="relative aspect-video rounded-xl overflow-hidden bg-gray-800">
+            <div
+              key={index}
+              className={`relative aspect-video rounded-xl overflow-hidden bg-gray-800 cursor-pointer transition-all ${
+                index === 0 ? 'ring-2 ring-white' : 'hover:ring-2 hover:ring-gray-500'
+              }`}
+              onClick={() => index !== 0 && setCoverPhoto(index)}
+            >
               <img src={photo} alt={`Photo ${index + 1}`} className="w-full h-full object-cover" />
+              {index === 0 && (
+                <div className="absolute top-2 left-2 bg-white text-black text-xs font-semibold px-2 py-1 rounded">
+                  Cover
+                </div>
+              )}
               <button
                 type="button"
-                onClick={() => removePhoto(index)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removePhoto(index);
+                }}
                 className="absolute top-2 right-2 w-6 h-6 bg-black bg-opacity-70 rounded-full flex items-center justify-center hover:bg-opacity-90 transition"
                 aria-label="Remove photo"
               >
@@ -943,7 +1233,51 @@ export default function ReviewPage() {
 
         <div className="mb-8">
           <h3 className="text-lg font-light mb-3">Location</h3>
-          <p className="text-gray-400 text-sm mb-4">{propertyLocation}</p>
+          {isEditingLocation ? (
+            <div className="mb-4">
+              <input
+                type="text"
+                value={tempLocation}
+                onChange={(e) => setTempLocation(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-gray-500 mb-2"
+                placeholder="Enter address..."
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPropertyLocation(tempLocation);
+                    setIsEditingLocation(false);
+                  }}
+                  className="px-4 py-2 bg-white text-black rounded-lg text-sm font-semibold hover:bg-gray-200 transition"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempLocation(propertyLocation);
+                    setIsEditingLocation(false);
+                  }}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm hover:bg-gray-700 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              onClick={() => {
+                setTempLocation(propertyLocation);
+                setIsEditingLocation(true);
+              }}
+              className="text-gray-400 text-sm mb-4 cursor-pointer hover:text-white transition flex items-center gap-2"
+            >
+              <span>{propertyLocation}</span>
+              <span className="text-xs">✏️</span>
+            </div>
+          )}
           <PropertyMap location={propertyLocation} className="w-full h-64" />
         </div>
 
@@ -985,6 +1319,16 @@ export default function ReviewPage() {
           <div className="w-10"></div>
         </div>
         {renderProgressBar()}
+
+        {/* AI Analysis Loading Indicator */}
+        {isAnalyzing && (
+          <div className="px-6 py-3 bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700">
+            <div className="flex items-center gap-3">
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+              <p className="text-sm text-gray-300">AI analyzing your property scan...</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {currentStep === 0 && renderStep1()}
