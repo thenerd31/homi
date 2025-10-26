@@ -23,14 +23,14 @@ const PAST_TRIPS = [
     title: 'Cozy Beach House',
     location: 'Malibu, CA',
     date: 'Dec 2024',
-    image: '/images/peaceful-private-room-B-3-min-walk-to-ocean-beach/ocean_beach_1.avif',
+    image: '/images/3-min-walk-to-ocean-beach.avif',
   },
   {
     id: 2,
     title: 'Mountain Cabin',
     location: 'Lake Tahoe, CA',
     date: 'Nov 2024',
-    image: '/images/classic-private-room-in-west-LA/west_la_1.avif',
+    image: '/images/west-la.avif',
   },
 ];
 

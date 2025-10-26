@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Plus, Minus, Check, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // Icons for amenities
@@ -90,16 +90,76 @@ const allAmenities: Amenity[] = [
 
 export default function ReviewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(0);
+
+  // Parse initial data from URL params or localStorage (from video upload)
+  const getInitialData = () => {
+    // Try to get data from URL params first
+    const urlTitle = searchParams.get('title');
+    const urlLocation = searchParams.get('location');
+    const urlGuests = searchParams.get('guests');
+    const urlBedrooms = searchParams.get('bedrooms');
+    const urlBeds = searchParams.get('beds');
+    const urlBathrooms = searchParams.get('bathrooms');
+    const urlAmenities = searchParams.get('amenities');
+
+    // If URL params exist, use them
+    if (urlTitle || urlLocation) {
+      return {
+        title: urlTitle || 'Sunny Studio in Downtown SF',
+        location: urlLocation || '8375 Fremont St, San Francisco, CA, 00000',
+        guests: urlGuests ? parseInt(urlGuests) : 6,
+        bedrooms: urlBedrooms ? parseInt(urlBedrooms) : 2,
+        beds: urlBeds ? parseInt(urlBeds) : 3,
+        bathrooms: urlBathrooms ? parseInt(urlBathrooms) : 1,
+        amenities: urlAmenities ? urlAmenities.split(',') : ['tv', 'kitchen', 'projector'],
+      };
+    }
+
+    // Otherwise try localStorage (set from video upload page)
+    if (typeof window !== 'undefined') {
+      const storedData = localStorage.getItem('propertyData');
+      if (storedData) {
+        const parsed = JSON.parse(storedData);
+        return {
+          title: parsed.title || 'Sunny Studio in Downtown SF',
+          location: parsed.location || '8375 Fremont St, San Francisco, CA, 00000',
+          guests: parsed.guests || 6,
+          bedrooms: parsed.bedrooms || 2,
+          beds: parsed.beds || 3,
+          bathrooms: parsed.bathrooms || 1,
+          amenities: parsed.amenities || ['tv', 'kitchen', 'projector'],
+        };
+      }
+    }
+
+    // Default fallback
+    return {
+      title: 'Sunny Studio in Downtown SF',
+      location: '8375 Fremont St, San Francisco, CA, 00000',
+      guests: 6,
+      bedrooms: 2,
+      beds: 3,
+      bathrooms: 1,
+      amenities: ['tv', 'kitchen', 'projector'],
+    };
+  };
+
+  const initialData = getInitialData();
+
+  // Property Information (can be updated from video analysis)
+  const [propertyTitle, setPropertyTitle] = useState(initialData.title);
+  const [propertyLocation, setPropertyLocation] = useState(initialData.location);
 
   // Step 1: Room Information
   const [roomData, setRoomData] = useState<RoomData>({
-    guests: 6,
-    bedrooms: 2,
-    beds: 3,
-    bathrooms: 1,
+    guests: initialData.guests,
+    bedrooms: initialData.bedrooms,
+    beds: initialData.beds,
+    bathrooms: initialData.bathrooms,
   });
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(['tv', 'kitchen', 'projector']);
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(initialData.amenities);
 
   // Step 2: Dates
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -308,7 +368,7 @@ export default function ReviewPage() {
         <p className="text-gray-300 mb-4 text-sm">Here is what I feel in your space</p>
         <div className="mb-4">
           <div className="flex items-center justify-between mb-3">
-            <p className="font-light text-lg">Title : "Sunny Studio in Downtown SF" ✏️</p>
+            <p className="font-light text-lg">Title : "{propertyTitle}" ✏️</p>
           </div>
           <div className="flex flex-wrap gap-2 mb-2">
             <span className="px-3 py-1 bg-gray-800 rounded-full text-sm">City View</span>
@@ -327,7 +387,7 @@ export default function ReviewPage() {
 
         <div className="mb-6">
           <p className="mb-3 font-light">Location</p>
-          <p className="text-gray-400 text-sm mb-4">8375 Fremont St, San Francisco, CA, 00000 ✏️</p>
+          <p className="text-gray-400 text-sm mb-4">{propertyLocation} ✏️</p>
 
           <div className="w-full h-48 bg-gray-800 rounded-lg relative overflow-hidden">
             <div className="absolute inset-0 opacity-20">
@@ -671,8 +731,8 @@ export default function ReviewPage() {
             )}
           </div>
 
-          <h2 className="text-xl font-medium mb-2">Sunny Studio in Downtown SF</h2>
-          <p className="text-gray-400 text-sm mb-1">Entire Studio in San Francisco, California</p>
+          <h2 className="text-xl font-medium mb-2">{propertyTitle}</h2>
+          <p className="text-gray-400 text-sm mb-1">{propertyLocation}</p>
           <p className="text-gray-400 text-sm">
             {roomData.guests} guests | {roomData.bedrooms} bedroom{roomData.bedrooms !== 1 ? 's' : ''} | {roomData.beds} bed{roomData.beds !== 1 ? 's' : ''} | {roomData.bathrooms} bath{roomData.bathrooms !== 1 ? 's' : ''}
           </p>
