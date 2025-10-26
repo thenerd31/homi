@@ -1227,6 +1227,18 @@ async def geocode_location(location: str):
         }
 
 
+@app.get("/phone_test.html")
+async def phone_test():
+    """Serve phone camera test page (requires HTTPS for video)"""
+    return FileResponse("phone_test.html")
+
+
+@app.get("/phone_test_simple.html")
+async def phone_test_simple():
+    """Serve simple photo upload test page (works over HTTP)"""
+    return FileResponse("phone_test_simple.html")
+
+
 @app.get("/")
 async def root():
     return {

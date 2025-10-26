@@ -1,632 +1,357 @@
+"""
+Lean YOLO Service for Real-Time Object Detection
+Optimized for phone camera streaming and pricing amenity extraction
+"""
+
 from ultralytics import YOLO
 import cv2
 import numpy as np
-from typing import List, Dict, Any, Optional, Set
-from PIL import Image
-import io
-import os
-import base64
+from typing import Dict, Any, List, Set
 from collections import Counter
+import os
+import uuid
+from datetime import datetime
 
 
 class YOLOService:
     def __init__(self, model_path: str = "yolov8n.pt"):
         """
-        Initialize YOLO model with comprehensive amenity detection
+        Initialize YOLO model for fast real-time detection
 
         Args:
-            model_path: Path to YOLO model weights
-                - "yolov8n.pt" (nano, fastest - good for demo)
-                - "yolov8s.pt" (small)
-                - "yolov8m.pt" (medium - recommended for accuracy)
-                - "yolov8l.pt" (large, most accurate)
+            model_path: "yolov8n.pt" (nano - fastest, recommended)
         """
         try:
             self.model = YOLO(model_path)
             self.confidence_threshold = float(os.getenv("YOLO_CONFIDENCE", "0.45"))
 
-            # Comprehensive mappings
-            self.amenity_map = self._create_amenity_mapping()
-            self.room_indicators = self._create_room_indicators()
-            self.luxury_indicators = self._create_luxury_indicators()
+            # Map COCO objects → pricing amenities
+            self.amenity_map = {
+                # Furniture
+                "bed": ["bedroom", "sleeping area"],
+                "couch": ["living room", "seating area"],
+                "chair": ["seating"],
+                "dining table": ["dining area"],
+
+                # Kitchen
+                "refrigerator": ["full kitchen", "modern appliances"],
+                "oven": ["full kitchen", "cooking facilities"],
+                "microwave": ["kitchen appliances"],
+                "sink": ["kitchen"],
+
+                # Electronics
+                "tv": ["TV", "entertainment"],
+                "laptop": ["workspace", "work-from-home ready"],
+
+                # Bathroom
+                "toilet": ["bathroom"],
+
+                # Decor & Quality Indicators
+                "potted plant": ["plants", "well-decorated"],
+                "vase": ["tasteful decor"],
+                "book": ["reading materials", "thoughtful decor"],
+                "wine glass": ["glassware", "entertainment-ready"],
+
+                # Outdoor
+                "bench": ["outdoor seating"],
+                "umbrella": ["patio/deck"],
+                "bicycle": ["bike storage"],
+                "car": ["parking"],
+            }
+
+            # Room detection rules
+            self.room_indicators = {
+                "bedroom": ["bed"],
+                "bathroom": ["toilet", "sink"],
+                "kitchen": ["refrigerator", "oven", "microwave"],
+                "living_room": ["couch", "tv"],
+                "dining_room": ["dining table", "chair"],
+            }
+
+            # Session storage for aggregating scan data
+            self.sessions = {}
+
+            print(f"✅ YOLO service initialized with {model_path}")
 
         except Exception as e:
-            print(f"Error initializing YOLO: {e}")
+            print(f"❌ Error initializing YOLO: {e}")
             raise
 
-    def _create_amenity_mapping(self) -> Dict[str, List[str]]:
-        """
-        Comprehensive mapping of YOLO COCO objects to listing amenities
-        Each detected object can map to multiple amenities
-        """
-        return {
-            # === MAJOR FURNITURE ===
-            "bed": ["Bedroom", "Comfortable sleeping", "Furniture"],
-            "couch": ["Living room", "Comfortable seating", "Lounge area"],
-            "chair": ["Seating", "Dining area"],
-            "dining table": ["Dining table", "Dining area", "Eat-in kitchen"],
-            "toilet": ["Bathroom", "Private bathroom"],
- 
-            # === KITCHEN APPLIANCES ===
-            "refrigerator": ["Full kitchen", "Refrigerator", "Modern appliances"],
-            "oven": ["Full kitchen", "Oven", "Cooking facilities"],
-            "microwave": ["Microwave", "Kitchen appliances"],
-            "toaster": ["Kitchen appliances", "Breakfast amenities"],
-            "sink": ["Kitchen sink", "Bathroom facilities"],
+    def create_session(self, session_id: str = None) -> str:
+        """Create a new scanning session"""
+        if not session_id:
+            session_id = str(uuid.uuid4())
 
-            # === ENTERTAINMENT & TECHNOLOGY ===
-            "tv": ["TV", "Smart TV", "Entertainment", "Cable TV"],
-
-            # === DECOR & AMBIANCE ===
-            "potted plant": ["Indoor plants", "Greenery", "Thoughtful decor", "Natural light"],
-            "vase": ["Tasteful decor", "Elegant furnishings"],
-            "clock": ["Furnished", "Home essentials"],
-            "book": ["Reading materials", "Bookshelf", "Library", "Relaxation area"],
-            "teddy bear": ["Family-friendly", "Kids welcome"],
-
-            # === KITCHENWARE & DINING ===
-            "bottle": ["Kitchen essentials", "Drinking glasses"],
-            "wine glass": ["Wine glasses", "Glassware", "Entertainment-ready"],
-            "cup": ["Coffee mugs", "Kitchenware", "Tea & coffee"],
-            "bowl": ["Dishware", "Fully equipped kitchen"],
-            "knife": ["Cooking utensils", "Full kitchen"],
-            "spoon": ["Cutlery", "Dining essentials"],
-            "fork": ["Cutlery", "Dining essentials"],
-
+        self.sessions[session_id] = {
+            "session_id": session_id,
+            "created_at": datetime.now().isoformat(),
+            "frames": [],
+            "all_amenities": set(),
+            "all_objects": [],
+            "room_detections": Counter(),
+            "frame_count": 0,
+            "images": []  # Store images every 10 frames
         }
 
-    def _create_room_indicators(self) -> Dict[str, Dict[str, Any]]:
-        """
-        Enhanced room detection with primary and secondary indicators
-        """
-        return {
-            "bedroom": {
-                "primary": ["bed"],  # Must have
-                "secondary": ["chair", "clock", "book", "laptop"],  # Nice to have
-                "min_primary": 1,
-            },
-            "bathroom": {
-                "primary": ["toilet", "sink"],
-                "min_primary": 1,
-            },
-            "kitchen": {
-                "primary": ["refrigerator", "oven", "microwave", "sink"],
-                "secondary": ["dining table", "chair", "toaster", "bottle", "bowl"],
-                "min_primary": 2,  # At least 2 kitchen appliances
-            },
-            "living_room": {
-                "primary": ["couch", "tv"],
-                "secondary": ["chair", "potted plant", "book"],
-                "min_primary": 1,
-            },
-            "dining_room": {
-                "primary": ["dining table", "chair"],
-                "secondary": ["wine glass", "vase", "potted plant"],
-                "min_primary": 2,
-            },
-            "home_office": {
-                "primary": ["desk", "chair"],
-                "secondary": ["book"],
-                "min_primary": 2,
-            },
-        }
-    
+        return session_id
 
-    def _create_luxury_indicators(self) -> Dict[str, float]:
-        """
-        Objects that indicate luxury/premium property
-        Returns weight for quality scoring
-        """
-        return {
-            "wine glass": 8.0,
-            "book": 5.0,
-            "potted plant": 6.0,
-            "vase": 7.0,
-            "tv": 4.0,
-            "couch": 6.0,
-            "dining table": 5.0,
-        }
-
-    # def _create_family_indicators(self) -> Set[str]:
-    #     """Objects indicating family-friendly property"""
-    #     return {
-    #         "teddy bear", "sports ball", "frisbee", "bicycle",
-    #         "skateboard", "kite", "cake", "donut"
-    #     }
-
-    async def detect_amenities_from_image(
+    def add_frame_to_session(
         self,
-        image_data: bytes,
-        image_format: str = "jpeg"
+        session_id: str,
+        detection_result: Dict[str, Any],
+        image_base64: str = None,
+        store_image: bool = False
+    ):
+        """Add frame detection to session"""
+        if session_id not in self.sessions:
+            return
+
+        session = self.sessions[session_id]
+        session["frame_count"] += 1
+
+        # Store frame data (lightweight - just detection results)
+        session["frames"].append({
+            "frame_number": session["frame_count"],
+            "timestamp": datetime.now().isoformat(),
+            "detection": detection_result
+        })
+
+        # Aggregate amenities
+        if detection_result.get("amenities"):
+            session["all_amenities"].update(detection_result["amenities"])
+
+        # Aggregate objects
+        if detection_result.get("objects"):
+            for obj in detection_result["objects"]:
+                session["all_objects"].append(obj["class"])
+
+        # Track room detections
+        room_type = detection_result.get("room_type")
+        if room_type and room_type != "general_space":
+            session["room_detections"][room_type] += 1
+
+        # Store image ONLY when explicitly flagged (every 3 seconds from client)
+        if store_image and image_base64:
+            session["images"].append({
+                "frame_number": session["frame_count"],
+                "timestamp": datetime.now().isoformat(),
+                "image": image_base64,
+                "room_type": room_type,
+                "objects_detected": len(detection_result.get("objects", []))
+            })
+            print(f"📸 Photo captured! Total images: {len(session['images'])}")
+
+    def finalize_session(self, session_id: str) -> Dict[str, Any]:
+        """Get final aggregated results for session"""
+        if session_id not in self.sessions:
+            return {"error": "Session not found"}
+
+        session = self.sessions[session_id]
+
+        # Count unique objects
+        object_counts = Counter(session["all_objects"])
+
+        # Determine property type from room counts
+        bedrooms = session["room_detections"].get("bedroom", 0)
+        bathrooms = session["room_detections"].get("bathroom", 0)
+        has_kitchen = session["room_detections"].get("kitchen", 0) > 0
+        has_living_room = session["room_detections"].get("living_room", 0) > 0
+
+        if bedrooms >= 3 and bathrooms >= 2:
+            property_type = "Entire house"
+        elif bedrooms >= 2:
+            property_type = "Entire apartment"
+        elif bedrooms == 1 and has_kitchen:
+            property_type = "Studio apartment"
+        elif bedrooms == 1:
+            property_type = "Private room"
+        else:
+            property_type = "Property"
+
+        # Build final result
+        result = {
+            "session_id": session_id,
+            "created_at": session["created_at"],
+            "finalized_at": datetime.now().isoformat(),
+            "summary": {
+                "total_frames_processed": session["frame_count"],
+                "images_captured": len(session["images"]),
+                "property_type": property_type,
+                "bedrooms": bedrooms,
+                "bathrooms": bathrooms,
+                "has_kitchen": has_kitchen,
+                "has_living_room": has_living_room
+            },
+            "amenities": sorted(list(session["all_amenities"])),
+            "objects_detected": dict(object_counts.most_common(20)),
+            "room_breakdown": dict(session["room_detections"]),
+            "images": session["images"],
+            "all_frames": session["frames"][-20:]  # Last 20 frames for reference
+        }
+
+        return result
+
+    def get_session(self, session_id: str) -> Dict[str, Any]:
+        """Get current session data"""
+        if session_id not in self.sessions:
+            return {"error": "Session not found"}
+
+        session = self.sessions[session_id]
+        return {
+            "session_id": session_id,
+            "frame_count": session["frame_count"],
+            "amenities": list(session["all_amenities"]),
+            "room_detections": dict(session["room_detections"]),
+            "images_captured": len(session["images"])
+        }
+
+    def delete_session(self, session_id: str):
+        """Clean up session data"""
+        if session_id in self.sessions:
+            del self.sessions[session_id]
+
+    async def detect_realtime(
+        self,
+        image_bytes: bytes
     ) -> Dict[str, Any]:
         """
-        Comprehensive object detection and amenity extraction from single image
+        Fast real-time detection for streaming video frames
 
-        Returns rich metadata including:
-        - All detected objects with confidence
-        - Mapped amenities
-        - Room type inference
-        - Quality score
-        - Property characteristics (luxury, family-friendly, etc.)
+        Returns:
+            {
+                "objects": [{"class": "bed", "confidence": 0.92, "bbox": [x1,y1,x2,y2]}, ...],
+                "amenities": ["bedroom", "seating", ...],
+                "room_type": "bedroom",
+                "guidance": "Good! Move to kitchen",
+                "stats": {"total_objects": 5, "confidence_avg": 0.85}
+            }
         """
         try:
-            # Convert bytes to numpy array
-            nparr = np.frombuffer(image_data, np.uint8)
+            # Decode image
+            nparr = np.frombuffer(image_bytes, np.uint8)
             image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
             if image is None:
-                raise ValueError("Invalid image data")
-
-            # Get image dimensions for context
-            height, width = image.shape[:2]
-            image_size = {"width": width, "height": height}
+                return self._error_response("Invalid image data")
 
             # Run YOLO detection
-            results = self.model(image, conf=self.confidence_threshold, verbose=False)
+            results = self.model(image, conf=self.confidence_threshold, verbose=False)[0]
 
             # Extract detections
-            detections = []
+            objects = []
             detected_classes = []
 
-            for result in results:
-                boxes = result.boxes
-                for box in boxes:
-                    cls_id = int(box.cls[0])
-                    conf = float(box.conf[0])
-                    class_name = result.names[cls_id]
+            for box in results.boxes:
+                cls_id = int(box.cls[0])
+                confidence = float(box.conf[0])
+                class_name = results.names[cls_id]
 
-                    detected_classes.append(class_name)
+                # Bounding box coordinates
+                x1, y1, x2, y2 = [int(coord) for coord in box.xyxy[0].tolist()]
 
-                    # Get bounding box coordinates
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                objects.append({
+                    "class": class_name,
+                    "confidence": round(confidence, 2),
+                    "bbox": [x1, y1, x2, y2]
+                })
 
-                    # Calculate object size relative to image
-                    obj_width = x2 - x1
-                    obj_height = y2 - y1
-                    relative_size = (obj_width * obj_height) / (width * height)
+                detected_classes.append(class_name)
 
-                    detections.append({
-                        "object": class_name,
-                        "confidence": round(conf, 3),
-                        "bbox": [int(x1), int(y1), int(x2), int(y2)],
-                        "relative_size": round(relative_size, 4),
-                    })
-
-            # Convert to set for unique objects
-            detected_classes_set = set(detected_classes)
-
-            # Map to amenities
+            # Extract amenities for pricing
             amenities = self._extract_amenities(detected_classes)
 
             # Infer room type
-            room_analysis = self._infer_room_type(detected_classes_set, detected_classes)
+            room_type = self._infer_room_type(set(detected_classes))
 
-            # Calculate quality score
-            quality_score = self._calculate_quality_score(
-                detected_classes_set,
-                detections,
-                len(image_data)  # Image file size as quality indicator
-            )
+            # Generate user guidance
+            guidance = self._generate_guidance(room_type, len(objects))
 
-            # Property characteristics
-            characteristics = self._analyze_characteristics(detected_classes_set)
+            # Stats
+            avg_conf = sum(obj["confidence"] for obj in objects) / len(objects) if objects else 0
 
             return {
                 "success": True,
-                "image_size": image_size,
-                "detections": detections,
-                "detected_objects": list(detected_classes_set),
-                "object_counts": dict(Counter(detected_classes)),
-                "amenities": amenities,
-                "room_analysis": room_analysis,
-                "quality_score": quality_score,
-                "characteristics": characteristics,
-                "total_objects": len(detections),
+                "objects": objects,
+                "amenities": sorted(list(set(amenities))),
+                "room_type": room_type,
+                "guidance": guidance,
+                "stats": {
+                    "total_objects": len(objects),
+                    "unique_objects": len(set(detected_classes)),
+                    "confidence_avg": round(avg_conf, 2)
+                }
             }
 
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "detections": [],
-                "amenities": [],
-            }
-
-    async def detect_amenities_from_multiple_images(
-        self,
-        images: List[bytes],
-        metadata: Optional[List[Dict]] = None
-    ) -> Dict[str, Any]:
-        """
-        Process multiple images and aggregate comprehensive property analysis
-
-        Args:
-            images: List of image bytes
-            metadata: Optional metadata for each image (e.g., room labels)
-
-        Returns:
-            Complete property analysis with room counts, amenities, scoring
-        """
-        all_detections = []
-        all_amenities = set()
-        room_analyses = []
-        quality_scores = []
-        all_characteristics = []
-        all_object_counts = Counter()
-
-        for idx, image_data in enumerate(images):
-            result = await self.detect_amenities_from_image(image_data)
-
-            if result["success"]:
-                all_detections.extend(result["detections"])
-                all_amenities.update(result["amenities"])
-                room_analyses.append(result["room_analysis"])
-                quality_scores.append(result["quality_score"])
-                all_characteristics.append(result["characteristics"])
-                all_object_counts.update(result["object_counts"])
-
-        # Aggregate room detection
-        rooms = self._aggregate_room_detection(room_analyses)
-
-        # Property type inference
-        property_type = self._infer_property_type(all_object_counts, rooms)
-
-        # Overall quality
-        avg_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 50
-
-        # Aggregate characteristics
-        final_characteristics = self._aggregate_characteristics(all_characteristics)
-
-        # Generate title suggestions based on findings
-        title_keywords = self._generate_title_keywords(
-            rooms,
-            list(all_amenities),
-            final_characteristics
-        )
-
-        return {
-            "success": True,
-            "total_images_processed": len(images),
-            "total_detections": len(all_detections),
-            "unique_objects_found": len(all_object_counts),
-            "object_counts": dict(all_object_counts),
-            "amenities": sorted(list(all_amenities)),
-            "rooms": rooms,
-            "property_type": property_type,
-            "quality_score": round(avg_quality, 1),
-            "characteristics": final_characteristics,
-            "title_keywords": title_keywords,
-            "suggested_price_multiplier": self._calculate_price_multiplier(
-                avg_quality,
-                final_characteristics
-            ),
-        }
+            return self._error_response(str(e))
 
     def _extract_amenities(self, detected_classes: List[str]) -> List[str]:
-        """Convert detected objects to comprehensive amenity list"""
-        amenities = set()
-
-        for obj in detected_classes:
-            if obj in self.amenity_map:
-                amenities.update(self.amenity_map[obj])
-
-        # Inferred amenities based on combinations
-        detected_set = set(detected_classes)
-
-        if "couch" in detected_set and "tv" in detected_set:
-            amenities.add("Entertainment center")
-
-        if "laptop" in detected_set and "chair" in detected_set:
-            amenities.add("Work from home ready")
-
-        if "bed" in detected_set and detected_classes.count("bed") >= 2:
-            amenities.add("Multiple bedrooms")
-
-        if "potted plant" in detected_set and detected_classes.count("potted plant") >= 3:
-            amenities.add("Lots of greenery")
-
-        if any(obj in detected_set for obj in ["wine glass", "vase", "book"]):
-            amenities.add("Thoughtfully decorated")
-
-        if "dog" in detected_set or "cat" in detected_set:
-            amenities.add("Pet-friendly")
-
-        return list(amenities)
-
-    def _infer_room_type(
-        self,
-        detected_classes_set: Set[str],
-        detected_classes_list: List[str]
-    ) -> Dict[str, Any]:
         """
-        Enhanced room type inference with confidence scoring
+        Convert detected COCO objects to listing amenities
+        """
+        amenities = []
+
+        for obj_class in detected_classes:
+            if obj_class in self.amenity_map:
+                amenities.extend(self.amenity_map[obj_class])
+
+        # Count-based amenities
+        class_counts = Counter(detected_classes)
+
+        if class_counts["bed"] >= 2:
+            amenities.append("multiple bedrooms")
+
+        if class_counts["chair"] >= 4:
+            amenities.append("dining area (seats 4+)")
+
+        # Combination amenities
+        if "couch" in detected_classes and "tv" in detected_classes:
+            amenities.append("entertainment center")
+
+        if "desk" in detected_classes and "chair" in detected_classes:
+            amenities.append("home office")
+
+        return amenities
+
+    def _infer_room_type(self, detected_classes: Set[str]) -> str:
+        """
+        Infer room type from detected objects
         """
         room_scores = {}
 
         for room_type, indicators in self.room_indicators.items():
-            primary_matches = sum(
-                1 for obj in indicators["primary"]
-                if obj in detected_classes_set
-            )
-            secondary_matches = sum(
-                1 for obj in indicators.get("secondary", [])
-                if obj in detected_classes_set
-            )
-
-            # Must meet minimum primary requirement
-            if primary_matches >= indicators["min_primary"]:
-                score = (primary_matches * 3) + secondary_matches
-                room_scores[room_type] = score
+            matches = sum(1 for obj in indicators if obj in detected_classes)
+            if matches > 0:
+                room_scores[room_type] = matches
 
         if room_scores:
-            best_match = max(room_scores, key=lambda k: room_scores[k])
-            confidence = min(room_scores[best_match] / 10.0, 1.0)
+            return max(room_scores, key=room_scores.get)
 
-            return {
-                "room_type": best_match,
-                "confidence": round(confidence, 2),
-                "all_matches": room_scores,
-            }
+        return "general_space"
 
-        return {
-            "room_type": "general_space",
-            "confidence": 0.3,
-            "all_matches": {},
-        }
-
-    def _aggregate_room_detection(
-        self,
-        room_analyses: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """Aggregate room detections across all images"""
-        room_counts = Counter()
-
-        for analysis in room_analyses:
-            if analysis["confidence"] >= 0.5:
-                room_counts[analysis["room_type"]] += 1
-
-        return {
-            "bedrooms": room_counts.get("bedroom", 0),
-            "bathrooms": room_counts.get("bathroom", 0),
-            "has_kitchen": room_counts.get("kitchen", 0) > 0,
-            "has_living_room": room_counts.get("living_room", 0) > 0,
-            "has_dining_room": room_counts.get("dining_room", 0) > 0,
-            "has_office": room_counts.get("home_office", 0) > 0,
-            "has_outdoor_space": room_counts.get("outdoor_space", 0) > 0,
-            "has_garage": room_counts.get("garage", 0) > 0,
-            "total_rooms": sum(room_counts.values()),
-            "room_breakdown": dict(room_counts),
-        }
-
-    def _calculate_quality_score(
-        self,
-        detected_classes: Set[str],
-        detections: List[Dict],
-        image_size_bytes: int
-    ) -> float:
+    def _generate_guidance(self, room_type: str, object_count: int) -> str:
         """
-        Comprehensive quality scoring (0-100)
-        Factors: luxury items, variety, photo quality, furnishing level
+        Generate real-time guidance for user
         """
-        score = 40.0  # Base score
-
-        # Luxury item bonus
-        for obj in detected_classes:
-            if obj in self.luxury_indicators:
-                score += self.luxury_indicators[obj]
-
-        # Variety bonus (well-furnished)
-        unique_items = len(detected_classes)
-        score += min(unique_items * 1.5, 25)
-
-        # Photo quality (confidence + image size)
-        if detections:
-            avg_confidence = sum(d["confidence"] for d in detections) / len(detections)
-            score += avg_confidence * 8
-
-        # Large, clear photo bonus
-        if image_size_bytes > 500_000:  # > 500KB
-            score += 5
-
-        # Deductions for sparse rooms
-        if unique_items < 3:
-            score -= 15
-
-        return min(max(score, 0), 100.0)
-
-    def _analyze_characteristics(self, detected_classes: Set[str]) -> Dict[str, bool]:
-        """Analyze property characteristics"""
-        return {
-            "luxury": any(obj in self.luxury_indicators for obj in detected_classes),
-            "work_friendly": "desk" in detected_classes or "chair" in detected_classes,
-            "entertainment_ready": "tv" in detected_classes,
-            # "outdoor_space": any(obj in ["bench", "umbrella", "bicycle", "car"] for obj in detected_classes),
-            # "mountain_nearby": "skis" in detected_classes or "snowboard" in detected_classes,
-            "well_decorated": any(obj in ["potted plant", "vase", "book"] for obj in detected_classes),
-        }
-
-    def _aggregate_characteristics(
-        self,
-        all_characteristics: List[Dict[str, bool]]
-    ) -> Dict[str, bool]:
-        """Aggregate characteristics across all images"""
-        if not all_characteristics:
-            return {}
-
-        # A characteristic is true if it appears in ANY image
-        aggregated = {}
-        for key in all_characteristics[0].keys():
-            aggregated[key] = any(char[key] for char in all_characteristics)
-
-        return aggregated
-
-    def _infer_property_type(
-        self,
-        object_counts: Counter,
-        rooms: Dict[str, Any]
-    ) -> str:
-        """Infer property type based on detected features"""
-        if rooms["has_outdoor_space"] and rooms["bedrooms"] >= 3:
-            return "Entire house"
-        elif rooms["bedrooms"] >= 2:
-            return "Entire apartment"
-        elif rooms["bedrooms"] == 1:
-            return "Private room" if not rooms["has_kitchen"] else "Studio apartment"
-        elif rooms["has_office"] and not rooms["bedrooms"]:
-            return "Office space"
+        if object_count == 0:
+            return "⚠️ No objects detected - move closer or improve lighting"
+        elif object_count < 3:
+            return "🔄 Keep scanning - need more detail"
+        elif room_type == "general_space":
+            return "📸 Keep moving - scanning property"
         else:
-            return "Room"
+            return f"✅ Good! {room_type.replace('_', ' ').title()} captured"
 
-    def _generate_title_keywords(
-        self,
-        rooms: Dict[str, Any],
-        amenities: List[str],
-        characteristics: Dict[str, bool]
-    ) -> List[str]:
-        """Generate keywords for AI title generation"""
-        keywords = []
-
-        # Room-based keywords
-        if rooms["bedrooms"] >= 3:
-            keywords.append("Spacious")
-        if rooms["has_outdoor_space"]:
-            keywords.append("Outdoor space")
-        if rooms["has_garage"]:
-            keywords.append("Parking")
-
-        # Characteristic keywords
-        if characteristics.get("luxury"):
-            keywords.extend(["Luxury", "Premium", "Upscale"])
-        if characteristics.get("work_friendly"):
-            keywords.append("Work-from-home ready")
-        if characteristics.get("family_friendly"):
-            keywords.append("Family-friendly")
-
-        return keywords
-
-    def _calculate_price_multiplier(
-        self,
-        quality_score: float,
-        characteristics: Dict[str, bool]
-    ) -> float:
+    def _error_response(self, error_msg: str) -> Dict[str, Any]:
         """
-        Calculate price multiplier based on quality and features
-        Range: 0.7 to 2.0
+        Return error response structure
         """
-        multiplier = 1.0
-
-        # Quality-based adjustment
-        if quality_score >= 80:
-            multiplier += 0.4
-        elif quality_score >= 60:
-            multiplier += 0.2
-        elif quality_score < 40:
-            multiplier -= 0.3
-
-        # Feature bonuses
-        if characteristics.get("luxury"):
-            multiplier += 0.3
-        if characteristics.get("beach_nearby") or characteristics.get("mountain_nearby"):
-            multiplier += 0.2
-        if characteristics.get("outdoor_space"):
-            multiplier += 0.15
-        if characteristics.get("work_friendly"):
-            multiplier += 0.1
-
-        return round(max(0.7, min(multiplier, 2.0)), 2)
-
-    async def select_best_photos(
-        self,
-        images_with_results: List[Dict[str, Any]],
-        max_photos: int = 10
-    ) -> List[Dict[str, Any]]:
-        """
-        Intelligently select best photos prioritizing:
-        1. Room variety (bedroom, kitchen, bathroom, living room)
-        2. Quality score
-        3. Unique content
-        """
-        # Categorize by room type
-        room_photos = {}
-        general_photos = []
-
-        for img in images_with_results:
-            room_type = img.get("room_analysis", {}).get("room_type", "general_space")
-            confidence = img.get("room_analysis", {}).get("confidence", 0)
-
-            if confidence >= 0.5:
-                if room_type not in room_photos:
-                    room_photos[room_type] = []
-                room_photos[room_type].append(img)
-            else:
-                general_photos.append(img)
-
-        # Select best from each room category
-        selected = []
-        priority_rooms = ["bedroom", "kitchen", "bathroom", "living_room", "outdoor_space"]
-
-        for room in priority_rooms:
-            if room in room_photos and len(selected) < max_photos:
-                # Get highest quality photo from this room
-                best = max(room_photos[room], key=lambda x: x.get("quality_score", 0))
-                selected.append(best)
-
-        # Fill remaining slots with highest quality photos
-        remaining = [img for img in images_with_results if img not in selected]
-        remaining_sorted = sorted(remaining, key=lambda x: x.get("quality_score", 0), reverse=True)
-        selected.extend(remaining_sorted[:max_photos - len(selected)])
-
-        return selected[:max_photos]
-
-    def annotate_image(
-        self,
-        image_data: bytes,
-        detections: List[Dict[str, Any]]
-    ) -> bytes:
-        """
-        Draw bounding boxes and labels on image for demo/debugging
-        """
-        try:
-            nparr = np.frombuffer(image_data, np.uint8)
-            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-            for det in detections:
-                x1, y1, x2, y2 = [int(v) for v in det["bbox"]]
-                label = f"{det['object']} ({det['confidence']:.2f})"
-
-                # Color based on confidence
-                confidence = det["confidence"]
-                if confidence > 0.7:
-                    color = (0, 255, 0)  # Green - high confidence
-                elif confidence > 0.5:
-                    color = (0, 255, 255)  # Yellow - medium
-                else:
-                    color = (0, 165, 255)  # Orange - lower
-
-                cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
-
-                # Label background
-                (label_width, label_height), _ = cv2.getTextSize(
-                    label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
-                )
-                cv2.rectangle(
-                    image,
-                    (x1, y1 - label_height - 10),
-                    (x1 + label_width, y1),
-                    color,
-                    -1
-                )
-
-                # Label text
-                cv2.putText(
-                    image, label, (x1, y1 - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1
-                )
-
-            _, buffer = cv2.imencode('.jpg', image)
-            return buffer.tobytes()
-
-        except Exception as e:
-            print(f"Error annotating image: {e}")
-            return image_data
-
+        return {
+            "success": False,
+            "error": error_msg,
+            "objects": [],
+            "amenities": [],
+            "room_type": "unknown",
+            "guidance": "Error occurred",
+            "stats": {"total_objects": 0}
+        }

@@ -47,6 +47,9 @@ coverage/
 *.tmp
 .cache/
 
+# SSL certificates (local HTTPS testing)
+backend/certs/
+*.pem
 # ML Models
 *.pt
 *.pth

@@ -6,7 +6,7 @@ Used for: Photo analysis, amenity detection, image understanding
 from anthropic import Anthropic
 import os
 import base64
-from typing import List, Dict, Any
+from typing import List, Dict
 import json
 
 class VisionService:
@@ -101,7 +101,7 @@ Return ONLY a JSON object (no markdown):
         self,
         listings: List[Dict],
         user_query: str,
-        user_preferences: Dict = None
+        user_preferences
     ) -> List[Dict]:
         """
         Re-rank search results using Claude's reasoning
@@ -167,69 +167,70 @@ Return ONLY a JSON array (no markdown) of listing IDs in ranked order with brief
             # If parsing fails, return original order
             return listings
 
-    async def generate_ar_layout(self, photos: List[str]) -> Dict[str, Any]:
-        """
-        Analyze photos to generate AR room layout for Snap Spectacles
-        """
-        if not photos:
-            return {}
-
-        photo = photos[0]
-
-        if photo.startswith('http'):
-            image_source = {"type": "url", "url": photo}
-        else:
-            image_source = {"type": "base64", "media_type": "image/jpeg", "data": photo}
-
-        message = self.client.messages.create(
-            model=self.vision_model,
-            max_tokens=1024,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": image_source,
-                    },
-                    {
-                        "type": "text",
-                        "text": """Analyze this room for AR overlay generation.
-
-Identify:
-1. Room dimensions (approximate width, depth, height in feet)
-2. Key furniture pieces and their approximate positions
-3. Features to highlight (fireplace, view, special amenities)
-4. Suggested AR anchor points for overlays
-
-Return ONLY JSON (no markdown):
-{
-  "room_type": "...",
-  "dimensions": {"width": 15, "depth": 20, "height": 9},
-  "furniture": [
-    {"item": "bed", "position": "center-back", "size": "queen"}
-  ],
-  "highlight_points": [
-    {"feature": "ocean view", "position": "window-left", "priority": "high"}
-  ],
-  "ar_anchors": [
-    {"x": 0.5, "y": 0.5, "z": 0, "label": "main_feature"}
-  ]
-}"""
-                    }
-                ],
-            }]
-        )
-
-        try:
-            content = message.content[0].text
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-            return json.loads(content)
-        except:
-            return {}
-
+    # Deprecated
+#     async def generate_ar_layout(self, photos: List[str]) -> Dict[str, Any]:
+#         """
+#         Analyze photos to generate AR room layout for Snap Spectacles
+#         """
+#         if not photos:
+#             return {}
+#
+#         photo = photos[0]
+#
+#         if photo.startswith('http'):
+#             image_source = {"type": "url", "url": photo}
+#         else:
+#             image_source = {"type": "base64", "media_type": "image/jpeg", "data": photo}
+#
+#         message = self.client.messages.create(
+#             model=self.vision_model,
+#             max_tokens=1024,
+#             messages=[{
+#                 "role": "user",
+#                 "content": [
+#                     {
+#                         "type": "image",
+#                         "source": image_source,
+#                     },
+#                     {
+#                         "type": "text",
+#                         "text": """Analyze this room for AR overlay generation.
+#
+# Identify:
+# 1. Room dimensions (approximate width, depth, height in feet)
+# 2. Key furniture pieces and their approximate positions
+# 3. Features to highlight (fireplace, view, special amenities)
+# 4. Suggested AR anchor points for overlays
+#
+# Return ONLY JSON (no markdown):
+# {
+#   "room_type": "...",
+#   "dimensions": {"width": 15, "depth": 20, "height": 9},
+#   "furniture": [
+#     {"item": "bed", "position": "center-back", "size": "queen"}
+#   ],
+#   "highlight_points": [
+#     {"feature": "ocean view", "position": "window-left", "priority": "high"}
+#   ],
+#   "ar_anchors": [
+#     {"x": 0.5, "y": 0.5, "z": 0, "label": "main_feature"}
+#   ]
+# }"""
+#                     }
+#                 ],
+#             }]
+#         )
+#
+#         try:
+#             content = message.content[0].text
+#             if "```json" in content:
+#                 content = content.split("```json")[1].split("```")[0].strip()
+#             elif "```" in content:
+#                 content = content.split("```")[1].split("```")[0].strip()
+#             return json.loads(content)
+#         except:
+#             return {}
+    # kind of obsolete? Not really necessary for anything ngl
     async def detect_feature_positions(self, photos: List[str]) -> List[Dict]:
         """
         Detect positions of key features for AR markers

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIBE - Photo Upload Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .status {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .connected { background: #34C759; }
+        .disconnected { background: #FF3B30; }
+
+        #photo-input {
+            display: none;
+        }
+
+        .capture-btn {
+            width: 100%;
+            padding: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .capture-btn:active {
+            transform: scale(0.98);
+        }
+
+        #preview-container {
+            margin-bottom: 20px;
+        }
+
+        #preview {
+            width: 100%;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .results {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .result-item {
+            margin: 10px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+        }
+
+        .amenity-tag {
+            display: inline-block;
+            background: rgba(102, 126, 234, 0.3);
+            padding: 4px 12px;
+            border-radius: 12px;
+            margin: 4px;
+            font-size: 14px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 16px;
+            color: #FFD700;
+        }
+
+        .detection-box {
+            margin: 10px 0;
+            padding: 8px;
+            background: rgba(52, 199, 89, 0.2);
+            border-left: 3px solid #34C759;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 VIBE Property Scanner</h1>
+
+        <div class="status">
+            <div>
+                <span class="status-indicator disconnected" id="status"></span>
+                <strong id="status-text">Connecting...</strong>
+            </div>
+            <div style="margin-top: 10px;">
+                <div>📸 Photos: <span id="photo-count">0</span></div>
+                <div>🏠 Last Room: <span id="room-type">-</span></div>
+                <div>🎯 Total Objects: <span id="total-objects">0</span></div>
+            </div>
+        </div>
+
+        <input type="file" id="photo-input" accept="image/*" capture="environment">
+
+        <button class="capture-btn" onclick="capturePhoto()">
+            📷 Take Photo
+        </button>
+
+        <div id="preview-container">
+            <img id="preview" alt="Preview">
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            ⏳ Analyzing image...
+        </div>
+
+        <div id="results" class="results" style="display: none;">
+            <h3>Latest Detection Results</h3>
+            <div id="results-content"></div>
+        </div>
+
+        <div id="all-amenities" class="results" style="display: none;">
+            <h3>All Detected Amenities</h3>
+            <div id="amenities-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_HOST = window.location.hostname || 'localhost';
+        const WS_URL = `ws://${BACKEND_HOST}:8000/ws/scan`;
+
+        let ws = null;
+        let photoCount = 0;
+        let totalObjects = 0;
+        let allAmenities = new Set();
+
+        // Connect WebSocket on page load
+        window.onload = () => {
+            connectWebSocket();
+        };
+
+        function connectWebSocket() {
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                console.log('Connected to backend');
+                document.getElementById('status').className = 'status-indicator connected';
+                document.getElementById('status-text').textContent = 'Connected - Ready to scan!';
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'detection') {
+                    handleDetection(data);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('status-text').textContent = 'Connection error';
+            };
+
+            ws.onclose = () => {
+                document.getElementById('status').className = 'status-indicator disconnected';
+                document.getElementById('status-text').textContent = 'Disconnected';
+
+                // Try to reconnect after 2 seconds
+                setTimeout(connectWebSocket, 2000);
+            };
+        }
+
+        function capturePhoto() {
+            document.getElementById('photo-input').click();
+        }
+
+        // Handle photo selection
+        document.getElementById('photo-input').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Show preview
+            const preview = document.getElementById('preview');
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+
+                // Show loading
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('results').style.display = 'none';
+
+                // Send to backend
+                sendImageToBackend(e.target.result);
+            };
+
+            reader.readAsDataURL(file);
+        });
+
+        function sendImageToBackend(base64Image) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('Not connected to backend. Please refresh page.');
+                return;
+            }
+
+            photoCount++;
+            document.getElementById('photo-count').textContent = photoCount;
+
+            ws.send(JSON.stringify({
+                type: 'frame',
+                image: base64Image
+            }));
+        }
+
+        function handleDetection(data) {
+            // Hide loading
+            document.getElementById('loading').style.display = 'none';
+
+            // Update stats
+            document.getElementById('room-type').textContent = data.room_type || '-';
+            totalObjects += data.stats?.total_objects || 0;
+            document.getElementById('total-objects').textContent = totalObjects;
+
+            // Add amenities to global set
+            if (data.amenities) {
+                data.amenities.forEach(a => allAmenities.add(a));
+            }
+
+            // Show latest results
+            const resultsDiv = document.getElementById('results');
+            const contentDiv = document.getElementById('results-content');
+
+            resultsDiv.style.display = 'block';
+
+            let html = `
+                <div class="result-item">
+                    <strong>Room Type:</strong> ${data.room_type || 'Unknown'}
+                </div>
+                <div class="result-item">
+                    <strong>Guidance:</strong> ${data.guidance || '-'}
+                </div>
+                <div class="result-item">
+                    <strong>Objects Detected (${data.stats?.total_objects || 0}):</strong><br>
+            `;
+
+            if (data.objects && data.objects.length > 0) {
+                data.objects.forEach(obj => {
+                    html += `
+                        <div class="detection-box">
+                            ${obj.class} <span style="color: #FFD700;">(${(obj.confidence * 100).toFixed(0)}%)</span>
+                        </div>
+                    `;
+                });
+            } else {
+                html += '<div style="color: #FF3B30;">No objects detected</div>';
+            }
+
+            html += '</div>';
+
+            if (data.amenities && data.amenities.length > 0) {
+                html += `
+                    <div class="result-item">
+                        <strong>Amenities:</strong><br>
+                `;
+                data.amenities.forEach(amenity => {
+                    html += `<span class="amenity-tag">${amenity}</span>`;
+                });
+                html += '</div>';
+            }
+
+            contentDiv.innerHTML = html;
+
+            // Update all amenities
+            if (allAmenities.size > 0) {
+                const allAmenitiesDiv = document.getElementById('all-amenities');
+                allAmenitiesDiv.style.display = 'block';
+
+                let amenitiesHtml = '';
+                allAmenities.forEach(amenity => {
+                    amenitiesHtml += `<span class="amenity-tag">${amenity}</span>`;
+                });
+
+                document.getElementById('amenities-list').innerHTML = amenitiesHtml;
+            }
+        }
+    </script>
+</body>
+</html>

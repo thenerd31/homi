@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VIBE - Phone Camera Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #video-container {
+            position: relative;
+            flex: 1;
+            overflow: hidden;
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        #amenities {
+            position: absolute;
+            bottom: 80px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 13px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        #controls {
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            background: #007AFF;
+            color: #fff;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status.connected { background: #34C759; }
+        .status.disconnected { background: #FF3B30; }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="video-container">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+
+            <div id="info">
+                <div><span class="status disconnected" id="status"></span> <strong id="connection-text">Connecting...</strong></div>
+                <div>📸 Frame: <span id="frame-count">0</span></div>
+                <div>🏠 Room: <span id="room-type">-</span></div>
+                <div>🎯 Objects: <span id="object-count">0</span></div>
+                <div id="guidance" style="margin-top: 8px; color: #FFD700;">Initializing...</div>
+            </div>
+
+            <div id="amenities">
+                <strong>Detected Amenities:</strong>
+                <div id="amenity-list" style="margin-top: 8px;">-</div>
+            </div>
+        </div>
+
+        <div id="controls">
+            <button id="start-btn" onclick="startScanning()">Start Scanning</button>
+            <button id="stop-btn" onclick="stopScanning()" disabled>Stop</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - UPDATE THIS WITH YOUR BACKEND IP
+        const BACKEND_HOST = window.location.hostname || 'localhost';
+        const WS_URL = `ws://${BACKEND_HOST}:8000/ws/scan`;
+
+        // State
+        let ws = null;
+        let video = null;
+        let canvas = null;
+        let ctx = null;
+        let isScanning = false;
+        let frameInterval = null;
+        let videoWidth = 0;
+        let videoHeight = 0;
+
+        // Initialize
+        window.onload = async () => {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+
+            // Request camera access
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',  // Use back camera
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+
+                video.srcObject = stream;
+
+                video.onloadedmetadata = () => {
+                    // Set canvas size to match video
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    videoWidth = video.videoWidth;
+                    videoHeight = video.videoHeight;
+
+                    console.log('Camera ready:', videoWidth, 'x', videoHeight);
+                    document.getElementById('guidance').textContent = 'Camera ready! Press Start Scanning';
+                };
+            } catch (err) {
+                console.error('Camera error:', err);
+                alert('Could not access camera: ' + err.message);
+            }
+        };
+
+        function startScanning() {
+            if (isScanning) return;
+
+            // Connect WebSocket
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                document.getElementById('status').className = 'status connected';
+                document.getElementById('connection-text').textContent = 'Connected';
+                isScanning = true;
+                document.getElementById('start-btn').disabled = true;
+                document.getElementById('stop-btn').disabled = false;
+
+                // Start sending frames at 2 fps
+                frameInterval = setInterval(captureAndSend, 500);
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'connected') {
+                    console.log('Server ready:', data.message);
+                }
+                else if (data.type === 'detection') {
+                    handleDetection(data);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('guidance').textContent = '❌ Connection error';
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket closed');
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('connection-text').textContent = 'Disconnected';
+                stopScanning();
+            };
+        }
+
+        function stopScanning() {
+            isScanning = false;
+
+            if (frameInterval) {
+                clearInterval(frameInterval);
+                frameInterval = null;
+            }
+
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+
+            document.getElementById('start-btn').disabled = false;
+            document.getElementById('stop-btn').disabled = true;
+        }
+
+        function captureAndSend() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+            // Draw video frame to canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convert to JPEG base64
+            canvas.toBlob((blob) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = reader.result;
+
+                    // Send to backend
+                    ws.send(JSON.stringify({
+                        type: 'frame',
+                        image: base64
+                    }));
+                };
+                reader.readAsDataURL(blob);
+            }, 'image/jpeg', 0.8);
+        }
+
+        function handleDetection(data) {
+            // Update stats
+            document.getElementById('frame-count').textContent = data.frame || 0;
+            document.getElementById('room-type').textContent = data.room_type || '-';
+            document.getElementById('object-count').textContent = data.stats?.total_objects || 0;
+            document.getElementById('guidance').textContent = data.guidance || '';
+
+            // Update amenities
+            if (data.amenities && data.amenities.length > 0) {
+                document.getElementById('amenity-list').textContent = data.amenities.join(', ');
+            }
+
+            // Draw bounding boxes
+            if (data.objects && data.objects.length > 0) {
+                drawBoundingBoxes(data.objects);
+            }
+        }
+
+        function drawBoundingBoxes(objects) {
+            // Clear previous drawings
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Calculate scale factors (canvas vs video actual size)
+            const scaleX = canvas.width / videoWidth;
+            const scaleY = canvas.height / videoHeight;
+
+            objects.forEach(obj => {
+                const [x1, y1, x2, y2] = obj.bbox;
+                const conf = obj.confidence;
+                const label = obj.class;
+
+                // Scale coordinates
+                const sx1 = x1 * scaleX;
+                const sy1 = y1 * scaleY;
+                const sw = (x2 - x1) * scaleX;
+                const sh = (y2 - y1) * scaleY;
+
+                // Color based on confidence
+                let color = '#00FF00'; // Green
+                if (conf < 0.7) color = '#FFFF00'; // Yellow
+                if (conf < 0.5) color = '#FFA500'; // Orange
+
+                // Draw box
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(sx1, sy1, sw, sh);
+
+                // Draw label background
+                ctx.fillStyle = color;
+                const labelText = `${label} ${(conf * 100).toFixed(0)}%`;
+                ctx.font = 'bold 16px Arial';
+                const textWidth = ctx.measureText(labelText).width;
+                ctx.fillRect(sx1, sy1 - 25, textWidth + 10, 25);
+
+                // Draw label text
+                ctx.fillStyle = '#000';
+                ctx.fillText(labelText, sx1 + 5, sy1 - 7);
+            });
+        }
+    </script>
+</body>
+</html>
