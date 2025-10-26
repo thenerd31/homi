@@ -1,0 +1,23 @@
+# Minimal requirements for testing backend API
+
+# Core Framework
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pydantic-settings
+python-dotenv
+
+# AI & ML (what we actually use)
+anthropic
+groq
+httpx
+
+# Optional - comment out if issues
+# letta
+# uagents
+# cosmpy
+# elasticsearch
+# supabase
+# toolhouse
+# arize-phoenix

@@ -1,0 +1,388 @@
+"""
+VIBE - AI-Native Home Sharing Platform
+Main FastAPI Application
+"""
+
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
+import os
+from dotenv import load_dotenv
+
+# Import our modules
+from services.search_service import SearchService
+from services.vision_service import VisionService
+from services.letta_service import LettaService
+from services.groq_service import GroqService
+from services.voice_service import VoiceService
+from agents.fetch_agents import SearchAgent, PricingAgent, QAAgent
+from utils.elastic_client import ElasticClient
+from utils.supabase_client import SupabaseClient
+from monitoring.arize_logger import ArizeLogger
+
+load_dotenv()
+
+# Initialize FastAPI
+app = FastAPI(
+    title="VIBE API",
+    description="AI-Native Home Sharing Platform",
+    version="1.0.0"
+)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize services
+search_service = SearchService()
+vision_service = VisionService()
+letta_service = LettaService()
+groq_service = GroqService()
+voice_service = VoiceService()
+elastic_client = ElasticClient()
+supabase_client = SupabaseClient()
+arize_logger = ArizeLogger()
+
+# Initialize Fetch.ai agents
+search_agent = SearchAgent()
+pricing_agent = PricingAgent()
+qa_agent = QAAgent()
+
+
+# ============================================================================
+# MODELS
+# ============================================================================
+
+class SearchRequest(BaseModel):
+    query: str
+    user_id: Optional[str] = None
+    voice_mode: bool = False
+
+class ListingOptimizeRequest(BaseModel):
+    photos: List[str]  # Base64 or URLs
+    location: str
+    property_type: str
+
+class QuestionRequest(BaseModel):
+    listing_id: str
+    question: str
+    user_id: Optional[str] = None
+
+class SwipeAction(BaseModel):
+    listing_id: str
+    action: str  # "like" or "pass"
+    user_id: str
+
+
+# ============================================================================
+# GUEST FLOW - SEARCH & DISCOVER
+# ============================================================================
+
+@app.post("/api/search")
+async def natural_language_search(request: SearchRequest):
+    """
+    🎯 CORE FEATURE: Natural language search with Letta memory
+
+    Sponsors: Anthropic, Groq, Letta, Elastic, Fetch.ai, Arize
+
+    Example: "Find me a beachfront villa in Malibu under $300/night
+              with a hot tub for next weekend"
+    """
+    try:
+        # Log to Arize
+        arize_logger.log_search(request.query, request.user_id)
+
+        # Step 1: Use Letta to maintain user search history & preferences
+        user_context = await letta_service.get_user_context(request.user_id)
+
+        # Step 2: Extract structured filters with Groq (ultra-fast)
+        filters = await groq_service.extract_search_filters(
+            query=request.query,
+            user_history=user_context
+        )
+
+        # Step 3: Use Fetch.ai Search Agent to coordinate search
+        search_results = await search_agent.coordinate_search(filters)
+
+        # Step 4: Semantic search with Elastic vector DB
+        listings = await elastic_client.semantic_search(
+            query_vector=filters["embedding"],
+            filters=filters,
+            limit=50
+        )
+
+        # Step 5: Re-rank with Claude (complex reasoning)
+        ranked_listings = await vision_service.rank_by_relevance(
+            listings=listings,
+            user_query=request.query,
+            user_preferences=user_context
+        )
+
+        # Step 6: Update Letta memory
+        await letta_service.update_search_history(
+            user_id=request.user_id,
+            query=request.query,
+            filters=filters
+        )
+
+        return {
+            "success": True,
+            "listings": ranked_listings[:20],  # Top 20 for Tinder swipe
+            "filters_extracted": filters,
+            "personalized": bool(user_context)
+        }
+
+    except Exception as e:
+        arize_logger.log_error("search", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/voice-search")
+async def voice_search(audio_file: UploadFile = File(...)):
+    """
+    🎤 Voice search with Vapi
+
+    Sponsors: Vapi, Groq, Letta
+
+    User speaks: "I want a cozy cabin in Tahoe with a fireplace"
+    """
+    try:
+        # Transcribe with Vapi
+        transcription = await voice_service.transcribe(audio_file)
+
+        # Use same search logic
+        return await natural_language_search(
+            SearchRequest(
+                query=transcription,
+                voice_mode=True
+            )
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/swipe")
+async def handle_swipe(swipe: SwipeAction):
+    """
+    ❤️ Tinder-style swipe tracking
+
+    Sponsors: Letta (learns preferences), Arize (tracks engagement)
+
+    Learns what users like/pass to improve future recommendations
+    """
+    try:
+        # Update Letta with preference
+        await letta_service.record_swipe_action(
+            user_id=swipe.user_id,
+            listing_id=swipe.listing_id,
+            action=swipe.action
+        )
+
+        # Log engagement to Arize
+        arize_logger.log_engagement(swipe.user_id, swipe.action)
+
+        # If user liked, get similar listings
+        if swipe.action == "like":
+            listing = await supabase_client.get_listing(swipe.listing_id)
+            similar = await elastic_client.find_similar(
+                listing_vector=listing["embedding"],
+                limit=10
+            )
+            return {
+                "success": True,
+                "similar_listings": similar
+            }
+
+        return {"success": True}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/listings/{listing_id}/ask")
+async def ask_listing_question(listing_id: str, question: QuestionRequest):
+    """
+    💬 Q&A bot for each listing with Fetch.ai
+
+    Sponsors: Fetch.ai, Groq, Toolhouse
+
+    Guest asks: "Is this place pet-friendly?"
+    """
+    try:
+        # Get listing details
+        listing = await supabase_client.get_listing(listing_id)
+
+        # Use Fetch.ai Q&A Agent
+        answer = await qa_agent.answer_question(
+            listing_data=listing,
+            question=question.question
+        )
+
+        # Save Q&A pair for future reference
+        await supabase_client.save_qa_pair(
+            listing_id=listing_id,
+            question=question.question,
+            answer=answer
+        )
+
+        return {
+            "answer": answer,
+            "confidence": answer.get("confidence", 0.9)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# HOST FLOW - LISTING OPTIMIZATION
+# ============================================================================
+
+@app.post("/api/optimize-listing")
+async def optimize_listing(request: ListingOptimizeRequest):
+    """
+    🏠 HOST FEATURE: Auto-optimize listing with AI
+
+    Sponsors: Anthropic (vision), Groq, Fetch.ai (pricing), Toolhouse
+
+    Host uploads photos → AI generates everything
+    """
+    try:
+        # Step 1: Analyze photos with Claude Vision
+        amenities = await vision_service.detect_amenities(request.photos)
+
+        # Step 2: Use Fetch.ai Pricing Agent for competitive analysis
+        pricing_data = await pricing_agent.analyze_pricing(
+            location=request.location,
+            amenities=amenities,
+            property_type=request.property_type
+        )
+
+        # Step 3: Generate title & description with Groq (fast)
+        content = await groq_service.generate_listing_content(
+            amenities=amenities,
+            pricing=pricing_data
+        )
+
+        # Step 4: Generate Q&A pairs with Fetch.ai Q&A Agent
+        qa_pairs = await qa_agent.generate_common_questions(
+            amenities=amenities,
+            description=content["description"]
+        )
+
+        # Step 5: Save to Supabase
+        listing = await supabase_client.create_listing({
+            "photos": request.photos,
+            "amenities": amenities,
+            "title": content["title"],
+            "description": content["description"],
+            "suggested_price": pricing_data["suggested_price"],
+            "price_range": pricing_data["price_range"],
+            "qa_pairs": qa_pairs,
+            "location": request.location,
+            "property_type": request.property_type
+        })
+
+        # Step 6: Index in Elastic for semantic search
+        await elastic_client.index_listing(listing)
+
+        return {
+            "success": True,
+            "listing_id": listing["id"],
+            "title": content["title"],
+            "description": content["description"],
+            "amenities_detected": amenities,
+            "suggested_price": pricing_data["suggested_price"],
+            "competitive_analysis": pricing_data,
+            "qa_pairs": qa_pairs
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# AR & IMMERSIVE FEATURES
+# ============================================================================
+
+@app.get("/api/listings/{listing_id}/ar-data")
+async def get_ar_data(listing_id: str):
+    """
+    🥽 AR data for Snap Spectacles
+
+    Sponsors: Snap
+
+    Returns 3D placement data for AR overlay
+    """
+    listing = await supabase_client.get_listing(listing_id)
+
+    # Generate AR metadata
+    ar_data = {
+        "listing_id": listing_id,
+        "title": listing["title"],
+        "price": listing["suggested_price"],
+        "amenities": listing["amenities"],
+        "room_layout": await vision_service.generate_ar_layout(
+            listing["photos"]
+        ),
+        "overlay_positions": await vision_service.detect_feature_positions(
+            listing["photos"]
+        )
+    }
+
+    return ar_data
+
+
+@app.post("/api/listings/{listing_id}/start-tour")
+async def start_virtual_tour(listing_id: str):
+    """
+    🎥 Start live virtual tour with LiveKit
+
+    Sponsors: LiveKit
+
+    Connect guest with host for real-time video tour
+    """
+    # Create LiveKit room
+    room_token = await voice_service.create_tour_room(listing_id)
+
+    return {
+        "room_token": room_token,
+        "room_url": f"https://vibe.app/tour/{listing_id}"
+    }
+
+
+# ============================================================================
+# MONITORING & HEALTH
+# ============================================================================
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "services": {
+            "elastic": await elastic_client.health(),
+            "supabase": await supabase_client.health(),
+            "letta": await letta_service.health()
+        }
+    }
+
+
+@app.get("/")
+async def root():
+    return {
+        "app": "VIBE - AI-Native Home Sharing",
+        "version": "1.0.0",
+        "docs": "/docs"
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
