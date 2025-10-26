@@ -2,16 +2,30 @@
 
 import { useRouter } from 'next/navigation';
 import { Star } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import PropertyMap from '../../../components/PropertyMap';
 
 export default function SuccessPage() {
   const router = useRouter();
+  const [listingData, setListingData] = useState<any>(null);
+
+  useEffect(() => {
+    // Get listing data from localStorage
+    if (typeof window !== 'undefined') {
+      const storedData = localStorage.getItem('propertyData');
+      if (storedData) {
+        setListingData(JSON.parse(storedData));
+      }
+    }
+  }, []);
 
   // Sample data - in a real app, this would come from the listing data
   const listing = {
-    title: "Penthouse Loft in SF",
-    guests: 5,
-    bedrooms: 1,
-    bathrooms: 1,
+    title: listingData?.title || "Penthouse Loft in SF",
+    location: listingData?.location || "8375 Fremont St, San Francisco, CA, 00000",
+    guests: listingData?.guests || 5,
+    bedrooms: listingData?.bedrooms || 1,
+    bathrooms: listingData?.bathrooms || 1,
     rating: 4.99,
     // You can add the actual image URL here
     coverImage: "/api/placeholder/400/600"
@@ -43,6 +57,13 @@ export default function SuccessPage() {
                 <span className="text-sm">{listing.rating}</span>
               </div>
             </div>
+          </div>
+
+          {/* Location Section */}
+          <div className="p-6">
+            <h3 className="text-lg font-light mb-3">Location</h3>
+            <p className="text-gray-400 text-sm mb-4">{listing.location}</p>
+            <PropertyMap location={listing.location} className="w-full h-64" />
           </div>
         </div>
       </div>

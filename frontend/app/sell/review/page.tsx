@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Plus, Minus, Check, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import PropertyMap from '../../components/PropertyMap';
 
 // Icons for amenities
 const TVIcon = () => (
@@ -103,6 +104,7 @@ export default function ReviewPage() {
     const urlBeds = searchParams.get('beds');
     const urlBathrooms = searchParams.get('bathrooms');
     const urlAmenities = searchParams.get('amenities');
+    const urlPrice = searchParams.get('price');
 
     // If URL params exist, use them
     if (urlTitle || urlLocation) {
@@ -114,6 +116,7 @@ export default function ReviewPage() {
         beds: urlBeds ? parseInt(urlBeds) : 3,
         bathrooms: urlBathrooms ? parseInt(urlBathrooms) : 1,
         amenities: urlAmenities ? urlAmenities.split(',') : ['tv', 'kitchen', 'projector'],
+        price: urlPrice ? parseInt(urlPrice) : 168,
       };
     }
 
@@ -130,6 +133,7 @@ export default function ReviewPage() {
           beds: parsed.beds || 3,
           bathrooms: parsed.bathrooms || 1,
           amenities: parsed.amenities || ['tv', 'kitchen', 'projector'],
+          price: parsed.price || 168,
         };
       }
     }
@@ -143,6 +147,7 @@ export default function ReviewPage() {
       beds: 3,
       bathrooms: 1,
       amenities: ['tv', 'kitchen', 'projector'],
+      price: 168,
     };
   };
 
@@ -168,24 +173,29 @@ export default function ReviewPage() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
   // Step 3: Pricing
-  const [price, setPrice] = useState(168);
+  const [price, setPrice] = useState(initialData.price);
   const [isDraggingPrice, setIsDraggingPrice] = useState(false);
   const priceMin = 76;
   const priceMax = 310;
 
   // Step 4: Questions
-  const [questionsAnswered, setQuestionsAnswered] = useState({
-    summary: false,
-    selfCheckin: false,
-    keyAccess: false,
+  const [questionsAnswered, setQuestionsAnswered] = useState<{
+    summary: boolean | null;
+    selfCheckin: boolean | null;
+    keyAccess: boolean | null;
+  }>({
+    summary: null,
+    selfCheckin: null,
+    keyAccess: null,
   });
 
   // Photos
   const [photos, setPhotos] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Chat input
+  // Chat input and messages
   const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
 
   const incrementRoomValue = (key: keyof RoomData) => {
     setRoomData(prev => ({ ...prev, [key]: prev[key] + 1 }));
@@ -328,12 +338,155 @@ export default function ReviewPage() {
     };
   }, [isDraggingPrice, priceMin, priceMax]);
 
+  // Save price to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedData = localStorage.getItem('propertyData');
+      if (storedData) {
+        const parsed = JSON.parse(storedData);
+        parsed.price = price;
+        localStorage.setItem('propertyData', JSON.stringify(parsed));
+      }
+    }
+  }, [price]);
+
   const handlePublish = () => {
     router.push('/sell/review/success');
   };
 
+  const handleSendMessage = async () => {
+    if (!chatInput.trim()) return;
+
+    const userMessage = chatInput.trim();
+
+    // Add user message to chat
+    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+
+    // Clear input immediately
+    setChatInput('');
+
+    try {
+      // Build current listing data from state
+      const currentListing = {
+        title: propertyTitle,
+        location: propertyLocation,
+        guests: roomData.guests,
+        bedrooms: roomData.bedrooms,
+        beds: roomData.beds,
+        bathrooms: roomData.bathrooms,
+        amenities: selectedAmenities,
+        photos: photos,
+        price: price,
+      };
+
+      // Build conversation history (last 5 messages)
+      const conversationHistory = chatMessages.slice(-5).map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+
+      // Call seller chatbot API
+      const response = await fetch('http://localhost:8000/api/seller/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          seller_message: userMessage,
+          current_listing: currentListing,
+          conversation_history: conversationHistory,
+          current_stage: 'review_listing',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get chatbot response');
+      }
+
+      const data = await response.json();
+
+      // Debug: Log the response
+      console.log('📥 Chatbot response:', data);
+
+      // Update listing if changes were made
+      if (data.listing) {
+        if (data.listing.title !== propertyTitle) {
+          setPropertyTitle(data.listing.title);
+        }
+        if (data.listing.location !== propertyLocation) {
+          setPropertyLocation(data.listing.location);
+        }
+        if (data.listing.bathrooms !== roomData.bathrooms) {
+          setRoomData(prev => ({ ...prev, bathrooms: data.listing.bathrooms }));
+        }
+        if (data.listing.bedrooms !== roomData.bedrooms) {
+          setRoomData(prev => ({ ...prev, bedrooms: data.listing.bedrooms }));
+        }
+        if (data.listing.beds !== roomData.beds) {
+          setRoomData(prev => ({ ...prev, beds: data.listing.beds }));
+        }
+        if (data.listing.guests !== roomData.guests) {
+          setRoomData(prev => ({ ...prev, guests: data.listing.guests }));
+        }
+        if (data.listing.amenities && JSON.stringify(data.listing.amenities) !== JSON.stringify(selectedAmenities)) {
+          console.log('🔄 Updating amenities from:', selectedAmenities, 'to:', data.listing.amenities);
+          setSelectedAmenities(data.listing.amenities);
+        }
+        if (data.listing.price && data.listing.price !== price) {
+          console.log('💰 Updating price from listing data:', price, '→', data.listing.price);
+          setPrice(data.listing.price);
+        }
+      }
+
+      // Update price from pricing suggestions
+      if (data.pricing_suggestions && data.pricing_suggestions.suggested_price) {
+        const suggestedPrice = data.pricing_suggestions.suggested_price;
+        if (suggestedPrice !== price) {
+          console.log('💰 Updating price from:', price, 'to:', suggestedPrice);
+          setPrice(suggestedPrice);
+        }
+      }
+
+      // Update calendar dates if availability was set
+      if (data.listing.availability) {
+        const avail = data.listing.availability;
+        if (avail.start_date && avail.end_date) {
+          const start = new Date(avail.start_date);
+          const end = new Date(avail.end_date);
+          console.log('📅 Updating calendar dates from:', startDate, endDate, 'to:', start, end);
+          setStartDate(start);
+          setEndDate(end);
+        }
+      }
+
+      // Check if listing is published (final confirmation approved)
+      if (data.stage === 'published' || (data.stage === 'final_confirmation' && data.listing.status === 'published')) {
+        console.log('🎉 Listing published! Redirecting to success page...');
+        router.push('/sell/review/success');
+        return;
+      }
+
+      // Add assistant's response to chat
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: data.message || 'Got it!'
+      }]);
+
+    } catch (error) {
+      console.error('Chatbot error:', error);
+      // Show error message
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I had trouble processing that. Please try again.'
+      }]);
+    }
+  };
+
   const canProceedFromQuestions = () => {
-    return questionsAnswered.summary && questionsAnswered.selfCheckin && questionsAnswered.keyAccess;
+    // Summary must be true (yes), others just need to be answered
+    return questionsAnswered.summary === true &&
+           questionsAnswered.selfCheckin !== null &&
+           questionsAnswered.keyAccess !== null;
   };
 
   // Calculate nights between dates
@@ -363,7 +516,7 @@ export default function ReviewPage() {
   };
 
   const renderStep1 = () => (
-    <div className="flex-1 overflow-y-auto px-6 pb-32">
+    <div className={`flex-1 overflow-y-auto px-6 ${chatMessages.length > 0 ? 'pb-96' : 'pb-32'}`}>
       <div className="mb-6">
         <p className="text-gray-300 mb-4 text-sm">Here is what I feel in your space</p>
         <div className="mb-4">
@@ -389,29 +542,7 @@ export default function ReviewPage() {
           <p className="mb-3 font-light">Location</p>
           <p className="text-gray-400 text-sm mb-4">{propertyLocation} ✏️</p>
 
-          <div className="w-full h-48 bg-gray-800 rounded-lg relative overflow-hidden">
-            <div className="absolute inset-0 opacity-20">
-              <svg className="w-full h-full" viewBox="0 0 100 100">
-                <line x1="0" y1="0" x2="100" y2="0" stroke="#666" strokeWidth="0.5"/>
-                <line x1="0" y1="25" x2="100" y2="25" stroke="#666" strokeWidth="0.5"/>
-                <line x1="0" y1="50" x2="100" y2="50" stroke="#666" strokeWidth="0.5"/>
-                <line x1="0" y1="75" x2="100" y2="75" stroke="#666" strokeWidth="0.5"/>
-                <line x1="25" y1="0" x2="25" y2="100" stroke="#666" strokeWidth="0.5"/>
-                <line x1="50" y1="0" x2="50" y2="100" stroke="#666" strokeWidth="0.5"/>
-                <line x1="75" y1="0" x2="75" y2="100" stroke="#666" strokeWidth="0.5"/>
-              </svg>
-            </div>
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-              <div className="relative">
-                <div className="w-8 h-8 bg-black rounded-full border-4 border-white"></div>
-                <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-1 h-6 bg-black"></div>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-gray-400 text-sm mt-4">
-            Is this pin in the right spot? drag the pin to reposition
-          </p>
+          <PropertyMap location={propertyLocation} className="w-full h-64" />
         </div>
       </div>
 
@@ -515,30 +646,54 @@ export default function ReviewPage() {
         <p className="text-gray-400 text-sm mb-4">
           You can make quick changes or confirm to continue.
         </p>
-        <button
-          onClick={() => setQuestionsAnswered(prev => ({ ...prev, summary: true }))}
-          className={`w-full py-3 rounded-lg transition ${
-            questionsAnswered.summary
-              ? 'bg-white text-black'
-              : 'bg-gray-800 hover:bg-gray-700'
-          }`}
-        >
-          Yes
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setQuestionsAnswered(prev => ({ ...prev, summary: true }))}
+            className={`flex-1 py-3 rounded-lg transition ${
+              questionsAnswered.summary
+                ? 'bg-white text-black'
+                : 'bg-gray-800 hover:bg-gray-700'
+            }`}
+          >
+            Yes
+          </button>
+          <button
+            onClick={() => setQuestionsAnswered(prev => ({ ...prev, summary: false }))}
+            className={`flex-1 py-3 rounded-lg transition ${
+              questionsAnswered.summary === false
+                ? 'bg-white text-black'
+                : 'bg-gray-800 hover:bg-gray-700'
+            }`}
+          >
+            No
+          </button>
+        </div>
       </div>
 
       <div className="mb-6">
         <p className="text-gray-300 mb-4">Would you like guests to self-check in?</p>
-        <button
-          onClick={() => setQuestionsAnswered(prev => ({ ...prev, selfCheckin: true }))}
-          className={`w-full py-3 rounded-lg transition ${
-            questionsAnswered.selfCheckin
-              ? 'bg-white text-black'
-              : 'bg-gray-800 hover:bg-gray-700'
-          }`}
-        >
-          Yes
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setQuestionsAnswered(prev => ({ ...prev, selfCheckin: true }))}
+            className={`flex-1 py-3 rounded-lg transition ${
+              questionsAnswered.selfCheckin
+                ? 'bg-white text-black'
+                : 'bg-gray-800 hover:bg-gray-700'
+            }`}
+          >
+            Yes
+          </button>
+          <button
+            onClick={() => setQuestionsAnswered(prev => ({ ...prev, selfCheckin: false }))}
+            className={`flex-1 py-3 rounded-lg transition ${
+              questionsAnswered.selfCheckin === false
+                ? 'bg-white text-black'
+                : 'bg-gray-800 hover:bg-gray-700'
+            }`}
+          >
+            No
+          </button>
+        </div>
       </div>
 
       <div className="mb-8">
@@ -548,16 +703,28 @@ export default function ReviewPage() {
           <li>Key Box</li>
           <li>Door Code</li>
         </ul>
-        <button
-          onClick={() => setQuestionsAnswered(prev => ({ ...prev, keyAccess: true }))}
-          className={`w-full py-3 rounded-lg transition ${
-            questionsAnswered.keyAccess
-              ? 'bg-white text-black'
-              : 'bg-gray-800 hover:bg-gray-700'
-          }`}
-        >
-          Yes
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setQuestionsAnswered(prev => ({ ...prev, keyAccess: true }))}
+            className={`flex-1 py-3 rounded-lg transition ${
+              questionsAnswered.keyAccess
+                ? 'bg-white text-black'
+                : 'bg-gray-800 hover:bg-gray-700'
+            }`}
+          >
+            Yes
+          </button>
+          <button
+            onClick={() => setQuestionsAnswered(prev => ({ ...prev, keyAccess: false }))}
+            className={`flex-1 py-3 rounded-lg transition ${
+              questionsAnswered.keyAccess === false
+                ? 'bg-white text-black'
+                : 'bg-gray-800 hover:bg-gray-700'
+            }`}
+          >
+            No
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -578,7 +745,7 @@ export default function ReviewPage() {
     }
 
     return (
-      <div className="flex-1 overflow-y-auto px-6 pb-32">
+      <div className={`flex-1 overflow-y-auto px-6 ${chatMessages.length > 0 ? 'pb-96' : 'pb-32'}`}>
         <p className="text-gray-300 mb-4">When would you like to host?</p>
         <p className="text-gray-400 text-sm mb-8">Tell us the time / choose from the calendar</p>
 
@@ -616,8 +783,8 @@ export default function ReviewPage() {
           </div>
 
           <div className="grid grid-cols-7 gap-2 mb-3">
-            {dayNames.map(day => (
-              <div key={day} className="text-center text-xs text-gray-500 py-2 lowercase">
+            {dayNames.map((day, idx) => (
+              <div key={idx} className="text-center text-xs text-gray-500 py-2 lowercase">
                 {day}
               </div>
             ))}
@@ -668,7 +835,7 @@ export default function ReviewPage() {
     const percentage = ((price - priceMin) / (priceMax - priceMin)) * 100;
 
     return (
-      <div className="flex-1 overflow-y-auto px-6 pb-32">
+      <div className={`flex-1 overflow-y-auto px-6 ${chatMessages.length > 0 ? 'pb-96' : 'pb-32'}`}>
         <p className="text-gray-300 mb-16 leading-relaxed">
           Based on your space's size, location, dates, and nearby listings, I suggest :
         </p>
@@ -717,7 +884,7 @@ export default function ReviewPage() {
     const selectedAmenitiesData = allAmenities.filter(a => selectedAmenities.includes(a.id));
 
     return (
-      <div className="flex-1 overflow-y-auto px-6 pb-32">
+      <div className={`flex-1 overflow-y-auto px-6 ${chatMessages.length > 0 ? 'pb-96' : 'pb-32'}`}>
         <p className="text-gray-300 mb-8">Everything's ready. Let's make it live!</p>
 
         <div className="mb-8">
@@ -755,26 +922,8 @@ export default function ReviewPage() {
 
         <div className="mb-8">
           <h3 className="text-lg font-light mb-3">Location</h3>
-          <p className="text-gray-400 text-sm mb-4">San Francisco, California, United States</p>
-          <div className="w-full h-56 bg-gray-800 rounded-xl relative overflow-hidden">
-            <div className="absolute inset-0 opacity-20">
-              <svg className="w-full h-full" viewBox="0 0 100 100">
-                <line x1="0" y1="0" x2="100" y2="0" stroke="#666" strokeWidth="0.5"/>
-                <line x1="0" y1="25" x2="100" y2="25" stroke="#666" strokeWidth="0.5"/>
-                <line x1="0" y1="50" x2="100" y2="50" stroke="#666" strokeWidth="0.5"/>
-                <line x1="0" y1="75" x2="100" y2="75" stroke="#666" strokeWidth="0.5"/>
-                <line x1="25" y1="0" x2="25" y2="100" stroke="#666" strokeWidth="0.5"/>
-                <line x1="50" y1="0" x2="50" y2="100" stroke="#666" strokeWidth="0.5"/>
-                <line x1="75" y1="0" x2="75" y2="100" stroke="#666" strokeWidth="0.5"/>
-              </svg>
-            </div>
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-              <div className="relative">
-                <div className="w-8 h-8 bg-black rounded-full border-4 border-white"></div>
-                <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-1 h-6 bg-black"></div>
-              </div>
-            </div>
-          </div>
+          <p className="text-gray-400 text-sm mb-4">{propertyLocation}</p>
+          <PropertyMap location={propertyLocation} className="w-full h-64" />
         </div>
 
         <div className="mb-8">
@@ -822,17 +971,41 @@ export default function ReviewPage() {
       {currentStep === 2 && renderStep3()}
       {currentStep === 3 && renderStep4()}
 
+      {/* Chat Messages */}
+      {chatMessages.length > 0 && (
+        <div className="fixed bottom-20 left-0 right-0 bg-black/95 border-t border-gray-800 max-h-64 overflow-y-auto p-4 space-y-3">
+          {chatMessages.map((msg, idx) => (
+            <div
+              key={idx}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                  msg.role === 'user'
+                    ? 'bg-white text-black'
+                    : 'bg-gray-800 text-white'
+                }`}
+              >
+                <p className="text-sm">{msg.content}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="fixed bottom-0 left-0 right-0 bg-black border-t border-gray-800 p-4">
         <div className="flex items-center gap-3">
           <input
             type="text"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
             placeholder="Ask for Anything..."
             className="flex-1 bg-transparent border border-gray-700 rounded-full px-6 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500"
           />
           <button
             type="button"
+            onClick={handleSendMessage}
             className="p-3 hover:bg-gray-900 rounded-full transition"
             aria-label="Send message"
           >

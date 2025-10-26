@@ -5,17 +5,21 @@ Main FastAPI Application
 
 # ARIZE PHOENIX - Observability & Tracing
 # Must be imported BEFORE any Anthropic SDK usage
-from phoenix.otel import register
-from openinference.instrumentation.anthropic import AnthropicInstrumentor
+try:
+    from phoenix.otel import register
+    from openinference.instrumentation.anthropic import AnthropicInstrumentor
 
-# Register Phoenix tracing
-tracer_provider = register(
-    project_name="vibe-ai-platform",
-    endpoint="http://localhost:6006/v1/traces"
-)
+    # Register Phoenix tracing
+    tracer_provider = register(
+        project_name="vibe-ai-platform",
+        endpoint="http://localhost:6006/v1/traces"
+    )
 
-# Instrument Anthropic SDK to trace all Claude API calls
-AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
+    # Instrument Anthropic SDK to trace all Claude API calls
+    AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
+    print("✓ Phoenix observability enabled")
+except ImportError:
+    print("⚠ Phoenix not installed - running without observability")
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -778,22 +782,31 @@ async def seller_chatbot(request: SellerChatRequest):
 
         # If moving to pricing stage, get AI pricing suggestions
         if result["stage"] == "set_pricing":
-            # Get availability dates from listing
-            availability = request.current_listing.get("availability", [])
+            # Get availability dates from updated listing
+            availability = result["listing"].get("availability", [])
 
-            if availability:
-                # Get AI pricing suggestions
-                pricing_suggestions = await pricing_service.analyze_pricing(
-                    location=result["listing"].get("location", ""),
-                    property_type=result["listing"].get("property_type", ""),
-                    amenities=result["listing"].get("amenities", [])
-                )
+            # Get AI pricing suggestions (whether or not dates are set)
+            pricing_suggestions = await pricing_service.analyze_pricing(
+                location=result["listing"].get("location", ""),
+                property_type=result["listing"].get("property_type", "apartment"),
+                amenities=result["listing"].get("amenities", []),
+                bedrooms=result["listing"].get("bedrooms", 2),
+                bathrooms=result["listing"].get("bathrooms", 1)
+            )
 
-                result["pricing_suggestions"] = pricing_suggestions
+            result["pricing_suggestions"] = pricing_suggestions
+
+            # Update message to include pricing info
+            suggested_price = pricing_suggestions.get("suggested_price", 150)
+            result["message"] = f"Based on your location, amenities, and comparable listings, I suggest pricing at ${suggested_price}/night. You can adjust this if you'd like!"
+            result["suggestions"] = [f"Use ${suggested_price}/night", "Set my own price", "Tell me more about pricing"]
 
         return result
 
     except Exception as e:
+        print(f"❌ Seller chatbot error: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1181,6 +1194,37 @@ async def health_check():
             "vapi": await vapi_service.health()
         }
     }
+
+
+@app.get("/api/geocode")
+async def geocode_location(location: str):
+    """
+    Geocode a location string to lat/lng coordinates
+
+    Args:
+        location: Location string (e.g., "San Francisco, CA")
+
+    Returns:
+        {"lat": float, "lon": float, "location": str}
+    """
+    from utils.geocoding import geocode
+
+    coords = geocode(location)
+
+    if coords:
+        return {
+            "lat": coords[0],
+            "lon": coords[1],
+            "location": location
+        }
+    else:
+        # Return a default SF location if geocoding fails
+        return {
+            "lat": 37.7749,
+            "lon": -122.4194,
+            "location": location,
+            "fallback": True
+        }
 
 
 @app.get("/")

@@ -6,6 +6,7 @@ Conversational interface for sellers to review and edit their listings
 import os
 from typing import Dict, Any, List
 import json
+from datetime import date
 from anthropic import Anthropic
 
 class SellerChatbotService:
@@ -110,6 +111,10 @@ Would you like to make any changes?"""
 
 **Current Stage:** {current_stage}
 
+**Available Context:**
+- If seller has pricing suggestions from analysis, reference them when explaining pricing
+- Use specific numbers and comparisons to justify the suggested price
+
 **Conversation History:**
 {self._format_history(conversation_history)}
 
@@ -119,15 +124,22 @@ Your task:
 1. Understand what the seller wants to change
 2. If it's a specific edit (e.g., "change title to include luxury"), extract the edit
 3. If it's approval (e.g., "looks good"), move to next stage
-4. If unclear, ask for clarification
+4. If in set_dates stage and seller provides dates, extract them
+5. If in set_pricing stage and seller asks "why" or "explain", provide detailed pricing reasoning:
+   - Compare to similar properties in the area
+   - Consider amenities value (e.g., "Properties with pool and fitness center in this area average $230-270/night")
+   - Factor in location desirability
+   - Mention seasonal demand if applicable
+6. If seller wants to change the price (e.g., "change to 180", "i want 260"), extract the number as price
+7. If unclear, ask for clarification
 
 Return ONLY JSON:
 {{
   "action": "edit" | "approve" | "clarify",
   "message": "Your friendly response to the seller",
   "edits": {{
-    "field": "title" | "description" | "amenities" | "photos",
-    "new_value": "..." or ["..."]
+    "field": "title" | "description" | "amenities" | "photos" | "availability" | "price",
+    "new_value": "..." or ["..."] or {{"start_date": "...", "end_date": "..."}} or number
   }},
   "next_stage": "review_listing" | "set_dates" | "set_pricing" | "final_confirmation",
   "suggestions": ["Option 1", "Option 2", "Option 3"]
@@ -143,6 +155,21 @@ Examples:
 - Seller: "Make it sound more luxury"
   → action: "edit", field: "description", enhance with luxury language
 
+- Seller (in set_dates stage): "next friday to the friday after"
+  → action: "edit", field: "availability", new_value: {{"start_date": "2025-11-01", "end_date": "2025-11-08"}}, next_stage: "set_pricing"
+
+- Seller: "change to 180" or "i want 260"
+  → action: "edit", field: "price", new_value: 180 (or 260), message: "Got it! I've updated your nightly rate to $180."
+
+**Important Date Validation:**
+- Today is {date.today().isoformat()} (use this as reference!)
+- Rule 1: Start date CANNOT be before today. If user provides a past start date, respond:
+  "The start date [their date] is before today ({date.today().strftime('%B %d, %Y')}). Please provide a start date after today, for example [suggest date 1 week from today]."
+- Rule 2: End date MUST be after start date. If end date is before or same as start date, respond:
+  "The end date must be after the start date. Please provide valid dates."
+- Rule 3: If BOTH dates are valid (start > today AND end > start), accept them and proceed to set_pricing stage
+
+For amenities, use these exact IDs: "tv", "kitchen", "projector", "laundry", "pool", "fitness", "parking"
 Be conversational and helpful!
 """
 
@@ -181,6 +208,8 @@ Be conversational and helpful!
         # Apply edits if any
         updated_listing = current_listing.copy()
         changes_made = []
+        field = None
+        new_value = None
 
         if ai_response.get("action") == "edit" and ai_response.get("edits"):
             edits = ai_response["edits"]
@@ -193,6 +222,14 @@ Be conversational and helpful!
 
         # Determine next stage
         next_stage = ai_response.get("next_stage", current_stage)
+
+        # Auto-transition to pricing if dates were just set
+        if field == "availability" and new_value:
+            next_stage = "set_pricing"
+
+        # Initialize message and suggestions with defaults from AI response
+        message = ai_response.get("message", "Got it!")
+        suggestions = ai_response.get("suggestions", [])
 
         # If moving to next stage, update message
         if next_stage == "set_dates" and current_stage != "set_dates":
@@ -207,9 +244,12 @@ Be conversational and helpful!
             message = "Your listing is ready! Ready to publish?"
             suggestions = ["Yes, publish it!", "Let me review one more time"]
 
-        else:
-            message = ai_response.get("message", "Got it!")
-            suggestions = ai_response.get("suggestions", [])
+        # Check if user approved final confirmation (publish)
+        if current_stage == "final_confirmation" and ai_response.get("action") == "approve":
+            updated_listing["status"] = "published"
+            next_stage = "published"
+            message = "🎉 Congratulations! Your listing has been published successfully!"
+            suggestions = []
 
         return {
             "message": message,
