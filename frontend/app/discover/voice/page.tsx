@@ -204,10 +204,14 @@ export default function VoiceInputPage() {
                 content: 'You are a helpful assistant. Say the exact message provided and then immediately end the call.'
               }
             ]
-          }
+          },
+          // Remove serverUrl for local development (Vapi requires HTTPS)
+          serverUrl: undefined,
+          serverMessages: undefined
         };
 
         // Start call to speak
+        console.log('Starting Vapi call with config:', JSON.stringify(speakConfig, null, 2));
         await vapiRef.current.start(speakConfig);
         console.log('Vapi speaking:', text);
 
@@ -223,6 +227,7 @@ export default function VoiceInputPage() {
       }
     } catch (error) {
       console.error('Error speaking with Vapi:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
     }
   };
 
