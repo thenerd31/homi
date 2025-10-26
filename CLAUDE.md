@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VIBE is an AI-native home sharing platform that reimagines Airbnb with conversational search, Tinder-style swiping, and AR-powered listing creation. Built for CalHacks 2025 to demonstrate how a travel platform would be designed today using modern AI capabilities.
+**Homi** is an AI-native home sharing platform that reimagines Airbnb with conversational search, Tinder-style swiping, and AR-powered listing creation. Built for CalHacks 2025 to demonstrate how a travel platform would be designed today using modern AI capabilities.
 
 **Core Innovation**: Replace traditional filter UIs with natural conversation, replace endless scrolling with intelligent swiping, and replace manual listing creation with AR-powered scanning.
 
@@ -25,15 +25,19 @@ VIBE is an AI-native home sharing platform that reimagines Airbnb with conversat
 - `conversation_service.py` - Multi-turn conversational search with parameter extraction
 - `groq_service.py` - Fast inference for parameter extraction and content generation
 - `vision_service.py` - Anthropic Claude Vision for AR object detection and image quality scoring
+- `yolo_service.py` - YOLOv8 real-time object detection for Spectacles AR scanning
 - `letta_service.py` - User preference learning and memory management
 - `qa_service.py` - Conversational Q&A about listings
 - `pricing_service.py` - AI-powered dynamic pricing with market analysis
 - `voice_service.py` - Groq Whisper for voice-to-text transcription
+- `vapi_service.py` - Vapi integration for real-time voice conversations
 - `livekit_service.py` - Real-time video tours
 - `saved_listings_service.py` - Auto-organized saved listings with intelligent ranking
 - `seller_chatbot_service.py` - Conversational listing creation and editing
 - `image_filter_service.py` - Quality filtering and image selection
 - `preference_analysis_service.py` - Analyze user swipe patterns
+- `geocoding_service.py` - Address geocoding and location services
+- `search_service.py` - Core search orchestration
 
 **Utilities** (`backend/utils/`):
 - `elastic_client.py` - Elasticsearch integration for semantic search with vector embeddings
@@ -58,7 +62,13 @@ To run an agent: `cd backend/agents/fetch_agents && python search_agent.py`
   - `voice/page.tsx` - Voice input for search
   - `multimodal/page.tsx` - Combined text + voice + image search
   - `swipe/page.tsx` - Tinder-style property swiping interface
+  - `swipe/wishlist/page.tsx` - Saved listings wishlist view
 - `sell/page.tsx` - Seller flow (AR scanning simulation, listing creation)
+- `listing/[id]/page.tsx` - Individual listing detail page
+- `map/page.tsx` - Map view of listings
+- `preferences/page.tsx` - User preference management
+- `user-profile/page.tsx` - User profile and settings
+- `seller-profile/page.tsx` - Seller dashboard
 - `components/` - Shared UI components
 
 **Key Technologies**:
@@ -75,10 +85,24 @@ To run an agent: `cd backend/agents/fetch_agents && python search_agent.py`
 ```bash
 cd backend
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env  # Configure API keys
 uvicorn main:app --reload  # Runs on http://localhost:8000
+
+# For Spectacles/network access:
+uvicorn main:app --reload --host 0.0.0.0
+```
+
+**Backend with Arize Phoenix Monitoring** (optional):
+```bash
+# Terminal 1: Start Phoenix UI
+python -m phoenix.server.main serve
+
+# Terminal 2: Start backend (Phoenix traces at http://localhost:6006)
+cd backend
+source venv/bin/activate
+uvicorn main:app --reload
 ```
 
 **Frontend**:
@@ -86,23 +110,53 @@ uvicorn main:app --reload  # Runs on http://localhost:8000
 cd frontend
 npm install
 npm run dev  # Runs on http://localhost:3000
+npm run build  # Build for production
+npm run lint  # Run linting
 ```
 
 **Fetch.ai Agents** (optional):
 ```bash
 cd backend/agents/fetch_agents
 python search_agent.py  # Run each agent in separate terminal
+python pricing_agent.py
+python qa_agent.py
 ```
 
 ### Testing
 
-Backend has extensive test coverage in `backend/test_*.py` files:
-- `test_buyer_seller_flows.py` - End-to-end flow testing
-- `test_comprehensive.py` - Comprehensive API testing
-- `test_integration.py` - Integration tests
-- `test_real_apis.py` - Tests against real external APIs
+**Backend Tests** (`backend/test_*.py`):
+```bash
+cd backend
+source venv/bin/activate
 
-Run tests: `cd backend && python test_buyer_seller_flows.py`
+# End-to-end flows (recommended starting point)
+python test_buyer_seller_flows.py
+
+# Comprehensive API testing
+python test_comprehensive.py
+
+# Integration tests
+python test_integration.py
+
+# Real API tests (requires API keys)
+python test_real_apis.py
+
+# Voice transcription test
+python test_voice_manual.py path/to/audio.mp3
+
+# YOLO object detection test
+python test_yolo_standalone.py 'https://image-url.jpg'
+
+# Image filtering test
+python test_image_filter.py
+```
+
+**Interactive API Documentation**:
+```bash
+# Start backend, then visit:
+# http://localhost:8000/docs  (Swagger UI)
+# http://localhost:8000/redoc  (ReDoc)
+```
 
 ### API Keys and Environment
 
@@ -163,6 +217,47 @@ This project integrates multiple sponsor technologies:
 
 Each service has fallback/mock mode when API keys are unavailable.
 
+## Key Backend Endpoints
+
+The backend exposes a comprehensive REST API. Key endpoint groups:
+
+**Search & Discovery**:
+- `POST /api/search/conversation` - Multi-turn conversational search with parameter extraction
+- `POST /api/search/execute` - Execute search with complete parameters
+- `POST /api/swipe` - Track user swipes (like/pass) for preference learning
+- `GET /api/saved-listings/{user_id}` - Get auto-organized saved listings
+
+**Seller Onboarding**:
+- `POST /api/listing/scan` - Upload images for AR-style property scanning
+- `POST /api/listing/chatbot` - Conversational listing creation/editing
+- `POST /api/pricing/suggest` - AI-powered dynamic pricing suggestions
+- `POST /api/listing/publish` - Publish listing to Elasticsearch
+
+**Spectacles AR Integration**:
+- `POST /api/spectacles/scan-session` - Start new AR scanning session
+- `POST /api/spectacles/detect` - Real-time YOLO object detection from Spectacles camera
+- `POST /api/spectacles/finalize` - Finalize scan and generate listing
+
+**Voice Integration**:
+- `POST /api/voice-to-text` - Groq Whisper transcription (upload audio file)
+- `POST /api/vapi/call/start` - Start Vapi real-time voice conversation
+- `GET /api/vapi/context/{listing_id}` - Get listing context for Vapi assistant
+
+**Listing Q&A**:
+- `POST /api/qa/ask` - Ask questions about a specific listing
+- `POST /api/listing/{id}/details` - Get detailed listing information
+
+**User Preferences**:
+- `POST /api/preferences/analyze` - Analyze user swipe patterns
+- `GET /api/preferences/{user_id}` - Get learned user preferences
+
+**Health & Monitoring**:
+- `GET /health` - Health check endpoint
+- `GET /docs` - Swagger UI (interactive API documentation)
+- `GET /redoc` - ReDoc documentation
+
+All services gracefully handle missing API keys by falling back to mock implementations.
+
 ## Important Patterns
 
 ### Service Initialization
@@ -181,9 +276,9 @@ Backend has permissive CORS (`allow_origins=["*"]`) for development. Restrict th
 Images can be handled as base64 strings or URLs. The `ImageFilterService` scores quality based on sharpness, composition, and variety.
 
 ### Voice Integration
-Two voice modes (see `backend/VOICE_INTEGRATION.md`):
-1. **Groq Whisper** - Audio file transcription for search input
-2. **Vapi** - Real-time voice conversations for Q&A
+Two complementary voice technologies (see `backend/VOICE_INTEGRATION.md` for details):
+1. **Groq Whisper** - Audio file transcription for search input via `POST /api/voice-to-text`
+2. **Vapi** - Real-time voice conversations for Q&A with listings via `POST /api/vapi/call/start`
 
 ### Snap Spectacles Integration
 
@@ -267,6 +362,55 @@ The `ElasticClient` handles semantic search with embeddings:
 - Test files follow `test_*.py` naming convention
 - Mock external services when API keys unavailable
 - Focus on end-to-end flows (buyer/seller journeys)
+
+## Debugging and Troubleshooting
+
+**Backend Issues**:
+```bash
+# Check if all services initialized properly
+curl http://localhost:8000/health
+
+# View detailed API docs and test endpoints
+open http://localhost:8000/docs
+
+# Enable Arize Phoenix tracing for AI observability
+python -m phoenix.server.main serve
+# Then visit http://localhost:6006 for traces
+```
+
+**Common Issues**:
+- **Import errors**: Ensure virtual environment is activated (`source venv/bin/activate`)
+- **Port already in use**: Kill existing process or use different port (`uvicorn main:app --port 8001`)
+- **API key errors**: Services fall back to mock mode - check `.env` file for missing keys
+- **CORS errors**: Backend allows all origins in dev mode; check browser console
+- **Elasticsearch connection**: Service falls back to mock data if unavailable
+- **Frontend build errors**: Clear `.next` directory and rebuild (`rm -rf .next && npm run build`)
+
+**Spectacles AR Debugging**:
+- Backend must run with `--host 0.0.0.0` for network access
+- Check WiFi: Spectacles and computer must be on same network
+- Test connectivity: `curl http://<YOUR_IP>:8000/health` from phone
+- View Lens Studio logs: Logger panel shows all print statements
+- YOLO model: Downloads automatically on first use (~6MB `yolov8n.pt`)
+
+## Git Workflow
+
+**Current Branch**: `object-detection-feature` (working on YOLO integration for Spectacles)
+**Main Branch**: `main` - use for pull requests
+
+The project uses feature branches for development. Key branches include:
+- `backend-api` - Backend API development
+- `AR` - AR/Spectacles integration
+- `make-better-home` - UI/UX improvements
+
+**Testing Before Commits**:
+```bash
+# Backend: Run at least the buyer/seller flow tests
+cd backend && python test_buyer_seller_flows.py
+
+# Frontend: Check build
+cd frontend && npm run build
+```
 
 ## Deployment Considerations
 

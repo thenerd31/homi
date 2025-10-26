@@ -101,7 +101,7 @@ export default function VoiceSearchButton({ onSearchComplete, className = '' }: 
       } else {
         // Fallback: Start with minimal config
         await vapi.start({
-          name: 'VIBE Assistant',
+          name: 'Homi Assistant',
           firstMessage: 'Hi! Where would you like to stay?',
           model: {
             provider: 'anthropic',
