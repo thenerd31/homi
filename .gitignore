@@ -52,3 +52,5 @@ coverage/
 *.pth
 *.onnx
 *.h5
+frontend/public/datasets/*.csv
+frontend/public/datasets/*.csv

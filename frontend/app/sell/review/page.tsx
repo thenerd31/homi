@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, JSX } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Plus, Minus, Check, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -503,6 +503,8 @@ export default function ReviewPage() {
           accept="image/*"
           multiple
           onChange={handlePhotoUpload}
+          title="Add photos"
+          aria-label="Add photos"
           className="hidden"
         />
       </div>
@@ -803,7 +805,7 @@ export default function ReviewPage() {
     <div className="min-h-screen bg-black text-white flex flex-col">
       <div className="sticky top-0 bg-black z-10">
         <div className="flex items-center justify-between p-4">
-          <button onClick={() => router.back()} className="p-2">
+          <button onClick={() => router.back()} className="p-2" aria-label="Go back" title="Go back">
             <ArrowLeft className="w-6 h-6" />
           </button>
           <h1 className="text-lg font-light">

@@ -5,17 +5,18 @@ Main FastAPI Application
 
 # ARIZE PHOENIX - Observability & Tracing
 # Must be imported BEFORE any Anthropic SDK usage
-from phoenix.otel import register
-from openinference.instrumentation.anthropic import AnthropicInstrumentor
+# COMMENTED OUT - Install with: pip install openinference-instrumentation-anthropic arize-phoenix
+# from phoenix.otel import register
+# from openinference.instrumentation.anthropic import AnthropicInstrumentor
 
 # Register Phoenix tracing
-tracer_provider = register(
-    project_name="vibe-ai-platform",
-    endpoint="http://localhost:6006/v1/traces"
-)
+# tracer_provider = register(
+#     project_name="vibe-ai-platform",
+#     endpoint="http://localhost:6006/v1/traces"
+# )
 
 # Instrument Anthropic SDK to trace all Claude API calls
-AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
+# AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware

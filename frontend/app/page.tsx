@@ -20,7 +20,7 @@ export default function Home() {
   return (
     <div
       className={`min-h-screen flex flex-col transition-colors duration-500 ${
-        isGuest ? 'bg-[#C5C5BA]' : 'bg-[#1a1a1a]'
+        isGuest ? 'bg-[#dfded3]' : 'bg-[#1a1a1a]'
       }`}
     >
       {/* Header */}
@@ -95,7 +95,7 @@ export default function Home() {
         <button
           type="button"
           onClick={handleProceed}
-          className={`mt-24 w-20 h-20 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95`}
+          className={`mt-40 w-20 h-20 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95`}
           aria-label="Proceed"
         >
           <svg

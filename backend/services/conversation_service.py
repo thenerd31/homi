@@ -121,16 +121,27 @@ If a parameter is mentioned but unclear, don't include it. Only include what you
 """
 
         # Extract parameters using Claude
-        extraction_response = self.client.messages.create(
-            model=self.model,
-            max_tokens=1024,
-            messages=[{
-                "role": "user",
-                "content": extraction_prompt
-            }]
-        )
+        try:
+            extraction_response = self.client.messages.create(
+                model=self.model,
+                max_tokens=1024,
+                messages=[{
+                    "role": "user",
+                    "content": extraction_prompt
+                }]
+            )
 
-        extraction_text = extraction_response.content[0].text
+            extraction_text = extraction_response.content[0].text
+        except Exception as e:
+            # Anthropic/Claude error (network, auth, billing, etc.) — return a graceful response
+            print(f"Anthropic extraction error: {e}")
+            return {
+                "status": "collecting",
+                "message": "Sorry — the AI service is temporarily unavailable (billing or auth issue). Please try again later.",
+                "extracted_params": extracted_so_far,
+                "missing_params": self.REQUIRED_PARAMS,
+                "suggestions": []
+            }
 
         # Parse extraction
         try:
@@ -208,16 +219,45 @@ Examples:
 Be conversational and friendly!
 """
 
-        followup_response = self.client.messages.create(
-            model=self.model,
-            max_tokens=512,
-            messages=[{
-                "role": "user",
-                "content": followup_prompt
-            }]
-        )
+        try:
+            followup_response = self.client.messages.create(
+                model=self.model,
+                max_tokens=512,
+                messages=[{
+                    "role": "user",
+                    "content": followup_prompt
+                }]
+            )
 
-        followup_text = followup_response.content[0].text
+            followup_text = followup_response.content[0].text
+        except Exception as e:
+            print(f"Anthropic followup error: {e}")
+            # Fallback: ask a simple, local question for the missing param
+            fallback_questions = {
+                "location": {
+                    "message": "Where would you like to stay?",
+                    "suggestions": ["California coast", "Miami, FL", "Austin, TX", "New York, NY"]
+                },
+                "dates": {
+                    "message": "When are you planning to visit?",
+                    "suggestions": ["This weekend", "Next weekend", "Next month", "Custom dates"]
+                },
+                "guests": {
+                    "message": "How many guests?",
+                    "suggestions": ["Just me", "2 guests", "3-4 guests", "5+ guests"]
+                },
+                "price_max": {
+                    "message": "What's your budget per night?",
+                    "suggestions": ["Under $200", "$200-$300", "$300-$500", "$500+"]
+                }
+            }
+
+            fallback = fallback_questions.get(next_param, {
+                "message": f"Can you tell me about {next_param}?",
+                "suggestions": []
+            })
+            message = fallback["message"]
+            suggestions = fallback["suggestions"]
 
         try:
             if "```json" in followup_text:

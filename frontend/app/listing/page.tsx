@@ -319,7 +319,7 @@ export default function ListingPage() {
       <div className="fixed bottom-0 left-0 right-0 bg-[#DFDFD3] border-t border-stone-200 px-6 py-4">
         <button
           type="button"
-          onClick={() => router.push('/listing/confirm-pay')}
+          onClick={() => router.push(`/listing/confirm-pay/${listing.id}`)}
           className="w-full bg-stone-900 text-white py-4 rounded-full text-lg font-semibold hover:bg-stone-800 transition-all shadow-lg"
           aria-label="Reserve listing"
           title="Reserve listing"
