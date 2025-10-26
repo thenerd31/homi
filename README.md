@@ -1,669 +1,451 @@
-# 🌟 VIBE - AI-Native Home Sharing Platform
+# Homi - Conversational Vacation Rental Search
 
-> **"Find your vibe, instantly"**
+## The Problem
 
-Reimagining Airbnb as if it were founded today - conversational, intelligent, and AR-native.
+Over 80% of Airbnb hosts are individuals, not companies. Many list only one property—a family beach house, a mountain cabin they inherited, a spare room in their home. These everyday people lack the time or design skills to create professional listings. They're stuck filling endless forms, writing descriptions that sound generic, guessing at competitive prices, and hoping their amateur iPhone photos attract bookings.
 
-## 🎯 YC Track: Disrupting Airbnb with AI
+On the flip side, guests scroll endlessly through hundreds of listings, clicking through 20+ photos per property, trying to feel a vibe from static images. They toggle through 50+ filter dropdowns, read descriptions that all say "cozy" and "charming," and still can't tell if a place actually matches what they're looking for.
 
-**Thesis**: If Airbnb were founded in 2025, it wouldn't have filter dropdowns - it would have conversations. It wouldn't have endless scrolling - it would have intelligent swiping. It wouldn't have hosts manually listing - AR glasses would do it automatically.
+The process is slow, unpersonalized, and fundamentally outdated.
 
-### The Problem with 2008 Airbnb:
-- 😫 Complex filter UIs with 50+ options
-- 📜 Reading through 30+ listings manually
-- ⏰ Hosts spend hours crafting listings
-- 📸 Bad photos = no bookings
-- 🤷 No personalization or learning
+**What if listing and finding vacation rentals didn't have to take hours?**
 
-### Our AI-Native Solution:
+## What We Built
 
-## 🏗️ THE ACTUAL ARCHITECTURE
+Homi reimagines vacation rental search as a conversation, not a form. Instead of toggling filters, you describe what you want. Instead of scrolling endlessly, you swipe through intelligently matched properties. Instead of guessing at pricing and amenities, AI handles it automatically.
 
-### **BUYER FLOW** 🛒
+We built four key innovations that make this possible:
+
+**Prompt-Based Semantic Search**
+Say goodbye to keyword matching. We trained our search to understand what you *mean*, not just what you say. Ask for "a cozy place with beach vibes" and it finds properties with ocean views and hammocks, even if the listing never uses those exact words. The system uses vector embeddings to understand intent—it's like having a friend who actually gets what you're looking for instead of a robot that only knows exact matches.
+
+**Smart Mapping with Dynamic Radius**
+Ever search for "San Francisco" and get results in San Jose 50 miles away? We built a geocoding system that understands city sizes. Search for NYC and it looks within 35 miles (because NYC is huge). Search for Napa and it keeps it tight at 15 miles (because that's the whole valley). The system automatically maps over 40 US cities to GPS coordinates and adjusts search radius based on how sprawling or compact each city actually is.
+
+**AI-Powered Dynamic Pricing**
+Hosts don't have to guess what to charge anymore. Our pricing engine analyzes market rates for similar properties, calculates demand patterns (weekends vs weekdays, holiday premiums), and suggests competitive pricing with actual reasoning: "Similar 3-bedroom beach houses in your area go for $350-$450. Your ocean view and hot tub justify $380 on weekends. Holiday season? Bump it to $450."
+
+**Real-Time Object Detection for Listings**
+When hosts create listings, our vision system scans uploaded photos to automatically detect amenities. Upload a photo of your backyard and it spots the pool, hot tub, and BBQ grill. Show it your kitchen and it recognizes modern appliances and granite countertops. The system identifies over 50 property features automatically—no more manually checking boxes for every amenity. It also scores image quality, filtering out blurry shots and keeping only the best angles.
+
+## What Makes It Different
+
+**Traditional vacation rental search:**
+- Toggle through 50+ filter dropdowns
+- Scroll through endless listings
+- Read generic descriptions
+- No learning or personalization
+
+**Homi:**
+- Describe what you want in plain English (or by voice)
+- Swipe through intelligently matched results
+- System learns your preferences
+- Auto-organized saved listings
+
+---
+
+## How It Works
+
+### 1. Conversational Search
+
+Instead of filter menus, just describe what you want:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ 1. CONVERSATIONAL SEARCH (with follow-ups)                 │
-└─────────────────────────────────────────────────────────────┘
-  User: "I want a beach house in California"
-  AI: "Great! When are you planning to visit?"
-  User: "Next weekend, 3 guests"
-  AI: "What's your budget per night?"
-  User: "Under $300"
+You: "Beach house in California"
+Homi: "When are you planning to visit?"
+You: "Next weekend, 3 people"
+Homi: "What's your budget per night?"
+You: "Under $300"
+```
 
-  ↓ SPONSOR: Anthropic Claude (conversation), Groq (extraction)
+The system extracts structured parameters (location, dates, guests, budget) from natural language across multiple conversation turns.
 
-┌─────────────────────────────────────────────────────────────┐
-│ 2. INTELLIGENT FILTER EXTRACTION                           │
-└─────────────────────────────────────────────────────────────┘
-  AI extracts:
-  {
-    "location": "California coast",
-    "dates": "2025-11-01 to 2025-11-03",
-    "guests": 3,
-    "price_max": 300,
-    "amenities_inferred": ["beach access", "parking"]
-  }
+### 2. Semantic Search & Matching
 
-  ↓ SPONSOR: Letta (learns preferences over time)
+Uses vector embeddings to understand intent beyond keywords:
+- "Beach house with hot tub" matches properties even with different wording
+- Geographic radius filtering (dynamic based on city size)
+- Relevance threshold filtering (only show quality matches)
+- Hybrid approach: semantic + keyword + structured filters
 
-┌─────────────────────────────────────────────────────────────┐
-│ 3. SEMANTIC SEARCH + MATCHING                              │
-└─────────────────────────────────────────────────────────────┘
-  - Query Elasticsearch with filters + embeddings
-  - Find matches above threshold (e.g., 80% relevance)
-  - Use Maps API for radius filtering
+### 3. Swipe Interface
 
-  ↓ SPONSOR: Elastic (vector search)
+Results displayed in Tinder-inspired cards showing:
+- Photo carousel
+- Amenities
+- Location + distance
+- Price per night
+- Beds/baths
+- Rating
 
-┌─────────────────────────────────────────────────────────────┐
-│ 4. TINDER-STYLE SWIPING                                    │
-└─────────────────────────────────────────────────────────────┘
-  Show cards with:
-  - Photo carousel
-  - Amenities list
-  - Location + distance
-  - Price per night
-  - Beds/baths
-  - Star rating
+Swipe right = save, left = pass. System learns from swipe patterns.
 
-  Swipe Right = Like
-  Swipe Left = Pass
+### 4. Preference Learning
 
-  ↓ SPONSOR: Letta (tracks swipe patterns)
+Tracks behavior to improve future searches:
+- Swipe patterns (what features do you like?)
+- Search history (typical destinations, budgets)
+- Automatically incorporates learned preferences into future searches
 
-┌─────────────────────────────────────────────────────────────┐
-│ 5. AUTO-ORGANIZED SAVED LISTINGS                          │
-└─────────────────────────────────────────────────────────────┘
-  All "swipe right" listings saved and sorted by:
-  - Relevance to original search
-  - Learned preferences from past swipes
-  - Availability
+### 5. Auto-Organized Favorites
 
-  ↓ SPONSOR: Anthropic Claude (ranking)
+Saved listings automatically sorted by:
+- Original search relevance
+- Learned preferences
+- Current availability
+- Price changes
 
-┌─────────────────────────────────────────────────────────────┐
-│ 6. LISTING DETAILS & ACTIONS                               │
-└─────────────────────────────────────────────────────────────┘
-  Click on card to:
+---
 
-  OPTION A: Message Seller
-    - Real-time chat
-    - AI-suggested questions
+## Technical Architecture
 
-  OPTION B: Reserve
-    - Confirm dates
-    - Payment processing
-    - Auto-update seller calendar
-    - Auto-send confirmation email
+### Frontend Stack
+- **Framework**: Next.js 16 (App Router)
+- **Language**: TypeScript, React 19
+- **Styling**: Tailwind 4
+- **Key Libraries**: Framer Motion (swipe gestures), Vapi SDK (voice)
 
-  ↓ SPONSORS: (messaging), (payments), (email)
+**Key Routes**:
+- `/discover/text` - Text-based conversational search
+- `/discover/voice` - Voice input with push-to-talk
+- `/discover/swipe` - Tinder-esque property cards
+- `/sell` - Host listing creation (simulated)
 
-┌─────────────────────────────────────────────────────────────┐
-│ 7. OPTIONAL: 3D/AR PREVIEW (still deciding)                │
-└─────────────────────────────────────────────────────────────┘
-  - Frontend renders 3D model of property
-  - OR: Just show high-quality photos
+### Backend Stack
+- **Framework**: FastAPI (Python)
+- **Validation**: Pydantic models
+- **Architecture**: Service-oriented with dependency injection
 
-  ↓ SPONSOR: Snap (if we do 3D models)
+**Core Services**:
+
+**ConversationService** (`services/conversation_service.py`)
+- Multi-turn dialogue management
+- Parameter extraction using Claude
+- Follow-up question generation
+- State tracking across conversation
+
+**VisionService** (`services/vision_service.py`)
+- Image quality scoring
+- Amenity detection from photos
+- Multi-image analysis
+
+**LettaService** (`services/letta_service.py`)
+- User memory and context
+- Preference learning from swipe patterns
+- Historical search patterns
+
+**PricingService** (`services/pricing_service.py`)
+- Market rate analysis
+- Competitive pricing recommendations
+- Calendar-based pricing strategies
+
+**VoiceService** (`services/voice_service.py`)
+- Audio transcription via Groq Whisper
+- Push-to-talk interface support
+
+### Search & Data Layer
+
+**ElasticClient** (`utils/elastic_client.py`)
+- Vector embeddings for semantic search
+- Hybrid search (semantic + keyword + filters)
+- Geo-radius filtering
+- Relevance scoring
+
+**SupabaseClient** (`utils/supabase_client.py`)
+- PostgreSQL database (listings, users, swipes)
+- Object storage (images)
+- User session management
+
+**Geocoding** (`utils/geocoding.py`)
+- City name → GPS coordinates
+- Dynamic radius calculation by city size
+- 40+ US cities mapped
+
+### AI Models
+
+**Anthropic Claude Sonnet 4.5**
+- Conversational search dialogue
+- Parameter extraction
+- Content generation
+- Vision analysis
+
+**Groq**
+- Fast parameter extraction (Llama)
+- Audio transcription (Whisper)
+- Real-time inference requirements
+
+**Vapi**
+- Voice synthesis (11labs)
+- Speech-to-speech interface
+- Push-to-talk implementation
+
+**Elasticsearch Vector Search**
+- Semantic embeddings
+- K-NN similarity search
+- Filtered vector queries
+
+### Key API Endpoints
+
+**Search Flow**:
+```
+POST /api/search/conversation
+- Input: user message, conversation history, extracted params so far
+- Output: assistant response, updated params, missing params, search status
+
+POST /api/search/execute
+- Input: extracted params, relevance threshold
+- Output: ranked listings above threshold
+
+POST /api/voice-to-text
+- Input: audio file (webm)
+- Output: transcribed text
+```
+
+**User Tracking**:
+```
+POST /api/swipe
+- Input: user_id, listing_id, action (like/pass), metadata
+- Output: success confirmation
+- Side effect: Updates Letta with preference data
+
+GET /api/saved-listings/{user_id}
+- Output: Auto-ranked saved listings with reasoning
+```
+
+**Voice Interface**:
+```
+GET /api/vapi/public-key
+- Output: Vapi public key for client initialization
+
+GET /api/vapi/assistant
+- Output: Assistant configuration (voice, model, system prompt)
 ```
 
 ---
 
-### **SELLER FLOW** 🏡
+## Data Flow
+
+### Conversational Search Flow
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ 1. PUT ON AR GLASSES & START SCAN                          │
-└─────────────────────────────────────────────────────────────┘
-  Host: Puts on Snap Spectacles
-  App: "Point camera at each room. Walk slowly."
+1. User Input (text or voice)
+   ↓
+2. ConversationService.process_message()
+   - Calls Claude with conversation history
+   - Extracts parameters from user message
+   - Validates extracted params (location not multi-city, guests reasonable, etc)
+   - Merges with previously extracted params
+   - Checks if all required params collected
+   ↓
+3a. If params incomplete:
+   - Generate follow-up question for next missing param
+   - Return question + quick-reply suggestions
 
-  ↓ SPONSOR: Snap (AR Spectacles + Lens Studio)
+3b. If params complete:
+   - Signal ready_to_search
+   - Proceed to search execution
+   ↓
+4. Search Execution
+   - Build semantic query from params
+   - Generate embedding
+   - Query Elasticsearch with filters + vector search
+   - Apply geo-radius if location specified
+   - Filter by relevance threshold
+   - Rank results
+   ↓
+5. Return Results
+   - Top matches as swipeable cards
+   - Store search in user history (Letta)
+```
 
-┌─────────────────────────────────────────────────────────────┐
-│ 2. REAL-TIME AR OBJECT DETECTION                          │
-└─────────────────────────────────────────────────────────────┘
-  AS SELLER SCANS:
-  - Camera detects objects in real-time
-  - AR labels appear: "Pool ✓", "Hot tub ✓", "Ocean view ✓"
-  - Feedback: "Good coverage. Move to next room."
+### Voice Interface Flow
 
-  Backend receives:
-  - Stream of images
-  - Detected amenities in real-time
-  - Room dimensions (from AR depth)
+```
+1. User clicks mic button
+   ↓
+2. MediaRecorder captures audio
+   ↓
+3. User clicks again to stop
+   ↓
+4. Audio blob sent to /api/voice-to-text
+   ↓
+5. Groq Whisper transcribes
+   ↓
+6. Transcription sent to /api/search/conversation
+   (same flow as text search)
+   ↓
+7. Assistant response returned
+   ↓
+8. Vapi speaks response (11labs voice)
+   ↓
+9. Repeat for multi-turn conversation
+```
 
-  ↓ SPONSORS: Snap (object detection), Anthropic Vision (verification)
+### Swipe Learning Flow
 
-┌─────────────────────────────────────────────────────────────┐
-│ 3. IMAGE PROCESSING & FILTERING                            │
-└─────────────────────────────────────────────────────────────┘
-  - Backend receives many images
-  - Smooth out blurry/bad images
-  - Filter for best quality photos
-  - Detect duplicate angles
-  - Select top 10-15 photos
+```
+1. User swipes right/left on listing
+   ↓
+2. POST /api/swipe with action + listing metadata
+   ↓
+3. If swipe right:
+   - Save to user's favorites (Supabase)
+   - Send to Letta with full listing details
 
-  ↓ SPONSOR: Anthropic Claude Vision (quality scoring)
-
-┌─────────────────────────────────────────────────────────────┐
-│ 4. GENERATE INITIAL LISTING                                │
-└─────────────────────────────────────────────────────────────┘
-  AI auto-generates:
-  - Title (e.g., "Modern Beachfront Villa with Pool")
-  - Description (engaging, highlights amenities)
-  - Amenity list (from AR detection)
-  - Location (from GPS)
-  - Beds/baths count
-
-  ↓ SPONSOR: Groq (fast content generation)
-
-┌─────────────────────────────────────────────────────────────┐
-│ 5. SELLER REVIEWS VIA CHATBOT                              │
-└─────────────────────────────────────────────────────────────┘
-  Chatbot: "Here's your listing. Want to make any changes?"
-
-  Seller: "Change title to include 'oceanfront'"
-  Chatbot: "Updated! Anything else?"
-
-  Seller: "Remove the bathroom photo"
-  Chatbot: "Done. Confirm location, amenities, and photos?"
-
-  Seller: "Looks good"
-
-  ↓ SPONSOR: Anthropic Claude (conversational agent)
-
-┌─────────────────────────────────────────────────────────────┐
-│ 6. SET AVAILABILITY & DATES                                │
-└─────────────────────────────────────────────────────────────┘
-  Chatbot: "What dates are you available to host?"
-
-  Seller: "Weekends in November, and Dec 15-30"
-
-  Chatbot: Shows calendar view
-  Seller: Confirms dates
-
-  ↓ SPONSOR: (calendar integration)
-
-┌─────────────────────────────────────────────────────────────┐
-│ 7. AI PRICING SUGGESTION                                   │
-└─────────────────────────────────────────────────────────────┘
-  Chatbot: "Based on your dates, location, and amenities:
-  - Weekends: $380/night (high demand)
-  - Weekdays: $280/night
-  - Dec 15-30: $450/night (holiday premium)
-
-  Market analysis:
-  - Similar properties: $300-500/night
-  - Your amenities justify premium pricing
-  - Nov weekends have 85% booking rate"
-
-  Seller: "Sounds good" OR adjusts prices
-
-  ↓ SPONSORS: Groq (market analysis), Fetch.ai (pricing agent)
-
-┌─────────────────────────────────────────────────────────────┐
-│ 8. FINAL CONFIRMATION & PUBLISH                            │
-└─────────────────────────────────────────────────────────────┘
-  Chatbot: "Ready to publish your listing?"
-  Seller: "Yes"
-
-  → Listing goes live
-  → Indexed in Elasticsearch
-  → Available for buyer searches
-  → Seller notified when someone swipes right
-
-  ↓ SPONSOR: Elastic (indexing), Supabase (storage)
+4. Letta analyzes pattern:
+   - Preferred amenities (pools, hot tubs, etc)
+   - Price range
+   - Property types (house vs apartment)
+   - Locations
+   ↓
+5. Future searches:
+   - Boost listings matching learned preferences
+   - Pre-fill common parameters
+   - Suggest locations based on history
 ```
 
 ---
 
-## 🛠️ BACKEND IMPLEMENTATION GUIDE
+## Getting Started
 
-### **What You Need to Build**
-
-#### **1. Conversational Search API**
-
-**Endpoint**: `POST /api/search/conversation`
-
-```python
-# Flow:
-# 1. User sends message
-# 2. Check if we have all required parameters
-# 3. If missing params, ask follow-up question
-# 4. Once all params collected, run search
-
-REQUIRED_PARAMS = [
-    "location",      # Where?
-    "dates",         # When? (check-in, check-out)
-    "guests",        # How many people?
-    "price_max",     # Budget?
-]
-
-OPTIONAL_PARAMS = [
-    "bedrooms",
-    "amenities",
-    "property_type"
-]
-
-# SPONSORS:
-# - Anthropic Claude: Conversation management
-# - Groq: Fast parameter extraction
-# - Letta: Remember user's past preferences
-```
-
-**Response**:
-```json
-{
-  "message": "What's your budget per night?",
-  "missing_params": ["price_max"],
-  "extracted_so_far": {
-    "location": "California coast",
-    "dates": {"check_in": "2025-11-01", "check_out": "2025-11-03"},
-    "guests": 3
-  },
-  "suggestions": ["Under $200", "$200-$300", "$300-$500", "$500+"]
-}
-```
-
----
-
-#### **2. Intelligent Matching with Threshold**
-
-**Endpoint**: `POST /api/search/execute`
-
-```python
-# Once all params collected:
-# 1. Generate semantic embedding from query
-# 2. Search Elasticsearch with filters
-# 3. Calculate relevance scores
-# 4. Return only matches above threshold (e.g., 80%)
-# 5. Use Maps API to filter by radius
-
-# SPONSORS:
-# - Elastic: Vector search + filters
-# - Maps API: Geo radius
-# - Fetch.ai: Search agent coordination
-```
-
-**Response**:
-```json
-{
-  "matches": [
-    {
-      "id": "listing-123",
-      "relevance_score": 0.94,
-      "title": "Beachfront Villa",
-      "price": 280,
-      "distance_miles": 2.3,
-      "photos": ["url1", "url2"],
-      "amenities": ["pool", "hot_tub", "beach_access"],
-      "beds": 3,
-      "baths": 2,
-      "rating": 4.8
-    }
-  ],
-  "total_matches": 15,
-  "hardcoded_radius_miles": 25
-}
-```
-
----
-
-#### **3. Swipe Tracking & Learning**
-
-**Endpoint**: `POST /api/swipe`
-
-```python
-# Track every swipe:
-# 1. Store swipe right in user's saved listings
-# 2. Send to Letta for preference learning
-# 3. Analyze patterns (likes pools, prefers modern, etc.)
-# 4. Use patterns to boost future search results
-
-# SPONSORS:
-# - Letta: Learn preferences from swipes
-# - Supabase: Store swipe history
-```
-
-**Request**:
-```json
-{
-  "user_id": "user-abc",
-  "listing_id": "listing-123",
-  "action": "like",  // or "pass"
-  "metadata": {
-    "price": 280,
-    "amenities": ["pool", "hot_tub"],
-    "property_type": "villa"
-  }
-}
-```
-
----
-
-#### **4. Auto-Organized Saved Listings**
-
-**Endpoint**: `GET /api/saved-listings/{user_id}`
-
-```python
-# Get all swipe-right listings
-# Sort by:
-# 1. Original search relevance
-# 2. Learned preferences
-# 3. Availability
-# 4. Price changes
-
-# SPONSOR: Anthropic Claude (re-ranking with reasoning)
-```
-
-**Response**:
-```json
-{
-  "saved_listings": [
-    {
-      "id": "listing-123",
-      "rank": 1,
-      "rank_reason": "Matches your preference for pools and modern design. Price just dropped $20.",
-      "original_relevance": 0.94,
-      "availability": "available",
-      ...
-    }
-  ]
-}
-```
-
----
-
-#### **5. Real-Time AR Scanning (Seller Flow)**
-
-**Endpoint**: `POST /api/scan/stream` (WebSocket or SSE)
-
-```python
-# AS SELLER SCANS WITH SPECTACLES:
-# 1. Receive video stream from Lens Studio
-# 2. Run real-time object detection
-# 3. Send back AR labels to display
-# 4. Store detected amenities
-# 5. Quality-score each frame
-
-# TECHNICAL:
-# - WebSocket for bidirectional streaming
-# - OR: Server-Sent Events for AR labels
-# - Claude Vision API for object detection
-# - Store best frames for final listing
-
-# SPONSORS:
-# - Snap: Spectacles + Lens Studio
-# - Anthropic Vision: Object detection
-# - Supabase: Store images
-```
-
-**Flow**:
-```
-SELLER SENDS (via WebSocket):
-{
-  "type": "frame",
-  "image": "base64_encoded_image",
-  "timestamp": "...",
-  "depth_data": {...}  // from AR
-}
-
-BACKEND RESPONDS:
-{
-  "type": "ar_labels",
-  "detected": [
-    {"object": "pool", "confidence": 0.95, "bbox": [x, y, w, h]},
-    {"object": "ocean_view", "confidence": 0.88, "bbox": [...]}
-  ],
-  "feedback": "Good coverage. Move to bedroom next."
-}
-```
-
----
-
-#### **6. Image Quality Filtering**
-
-**Endpoint**: `POST /api/scan/finalize`
-
-```python
-# After scan complete:
-# 1. Get all captured frames
-# 2. Filter blurry images (sharpness score)
-# 3. Remove duplicates (image similarity)
-# 4. Select best angles (composition score)
-# 5. Return top 10-15 photos
-
-# SPONSOR: Anthropic Claude Vision (quality scoring)
-```
-
----
-
-#### **7. Seller Chatbot Onboarding**
-
-**Endpoint**: `POST /api/listing/chatbot`
-
-```python
-# Conversational flow:
-# 1. Generate initial listing from scan data
-# 2. Present to seller for review
-# 3. Accept natural language edits
-# 4. Update listing in real-time
-# 5. Confirm each section before moving to next
-
-# SPONSOR: Anthropic Claude (conversational agent)
-```
-
-**Example conversation**:
-```json
-// Initial
-{
-  "message": "Here's your listing. Want to make changes?",
-  "generated_listing": {
-    "title": "Modern Beachfront Villa with Pool",
-    "description": "...",
-    "amenities": ["pool", "hot_tub", "ocean_view"],
-    "photos": [...]
-  }
-}
-
-// Seller response
-{
-  "user_message": "Change title to include 'luxury'"
-}
-
-// Chatbot updates
-{
-  "message": "Updated to 'Luxury Beachfront Villa with Pool'. Anything else?",
-  "updated_listing": {...}
-}
-```
-
----
-
-#### **8. AI Pricing with Calendar**
-
-**Endpoint**: `POST /api/pricing/suggest`
-
-```python
-# Input: dates, location, amenities, property_type
-#
-# AI analyzes:
-# 1. Market rates for similar properties
-# 2. Demand by date (weekends vs weekdays)
-# 3. Seasonal pricing (holidays, summer, etc.)
-# 4. Historical booking rates
-# 5. Competitive positioning
-#
-# Output: Suggested price per date range with reasoning
-
-# SPONSORS:
-# - Groq: Fast market analysis
-# - Fetch.ai: Pricing agent
-```
-
-**Response**:
-```json
-{
-  "pricing_suggestions": [
-    {
-      "date_range": "Nov weekends",
-      "suggested_price": 380,
-      "reasoning": "High demand (85% booking rate), weekend premium",
-      "comparable_properties": [
-        {"listing": "abc", "price": 400},
-        {"listing": "def", "price": 350}
-      ]
-    },
-    {
-      "date_range": "Dec 15-30",
-      "suggested_price": 450,
-      "reasoning": "Holiday season, premium location, high demand"
-    }
-  ],
-  "market_position": "luxury",
-  "confidence": 0.89
-}
-```
-
----
-
-#### **9. Booking & Messaging**
-
-**Endpoints**:
-```python
-POST /api/booking/create     # Reserve dates, process payment
-POST /api/messages/send      # Buyer-seller messaging
-GET  /api/calendar/{listing_id}  # Availability calendar
-```
-
-**Sponsors**: TBD (Stripe for payments?)
-
----
-
-## 📊 SPONSOR TRACK MAPPING
-
-### **Required for Each Sponsor**
-
-| Sponsor | Where Used | Feature |
-|---------|-----------|---------|
-| **Anthropic** | Conversation, Vision, Ranking | Claude for conversational search, chatbot, object detection, quality scoring |
-| **Groq** | Filter extraction, Content gen | Fast parameter extraction, listing title/description, market analysis |
-| **Letta** | User memory | Learn preferences from searches and swipes |
-| **Elastic** | Search engine | Vector embeddings + filters for semantic search |
-| **Snap** | AR scanning | Spectacles + Lens Studio for seller property scanning with real-time object detection |
-| **Supabase** | Database | Store listings, users, swipes, messages |
-| **Fetch.ai** | Agents | Search Agent, Pricing Agent, Q&A Agent on Agentverse |
-| **Postman** | Orchestration | AI Agent block coordinating APIs |
-| **Vapi** (optional) | Voice search | Voice input instead of text |
-| **LiveKit** (optional) | Live tours | Optional video tours feature |
-| **Toolhouse** | Tool management | Function calling for agents |
-| **Arize** | Monitoring | Trace AI decisions, detect hallucinations |
-
----
-
-## 📁 PROJECT STRUCTURE
-
-```
-vibe/
-├── frontend/                    # Next.js + Tailwind
-│   ├── app/
-│   │   ├── search/             # Conversational search UI
-│   │   ├── swipe/              # Tinder-style cards
-│   │   ├── saved/              # Auto-organized saved listings
-│   │   ├── listing/[id]/       # Details + booking
-│   │   ├── messages/           # Buyer-seller chat
-│   │   └── host/
-│   │       ├── scan/           # AR scanning flow
-│   │       ├── chatbot/        # Listing review chatbot
-│   │       └── calendar/       # Availability + pricing
-│   └── components/
-│       ├── SwipeCard.tsx       # Tinder card
-│       ├── ConversationalSearch.tsx
-│       └── ARScanFeedback.tsx
-│
-├── backend/                     # FastAPI
-│   ├── main.py
-│   ├── services/
-│   │   ├── conversation_service.py   # NEW: Conversational search
-│   │   ├── groq_service.py           # Filter extraction
-│   │   ├── vision_service.py         # Object detection + quality
-│   │   ├── letta_service.py          # Preference learning
-│   │   ├── pricing_service.py        # Calendar-based pricing
-│   │   ├── booking_service.py        # NEW: Reservations
-│   │   └── messaging_service.py      # NEW: Chat
-│   ├── websockets/
-│   │   └── scan_stream.py            # NEW: Real-time AR scanning
-│   ├── agents/
-│   │   └── fetch_agents/
-│   │       ├── search_agent.py
-│   │       ├── pricing_agent.py
-│   │       └── qa_agent.py
-│   └── utils/
-│       ├── elastic_client.py
-│       ├── supabase_client.py
-│       └── image_processing.py       # NEW: Filter/quality
-│
-├── lens-studio/                 # Snap AR Lens
-│   └── vibe-seller-scan/
-│       ├── Scripts/
-│       │   ├── ARObjectDetector.js   # Real-time labels
-│       │   └── ScanGuidance.js       # User feedback
-│       └── vibe-scan.lsproj
-│
-└── README.md
-```
-
----
-
-## 🚀 GETTING STARTED
-
-### 1. Backend
+### Backend Setup
 ```bash
 cd backend
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# Add API keys
-uvicorn main:app --reload
+# Add API keys to .env
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 2. Frontend
+**Required Environment Variables**:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+GROQ_API_KEY=gsk_...
+ELASTIC_CLOUD_ID=...
+ELASTIC_API_KEY=...
+SUPABASE_URL=https://...
+SUPABASE_KEY=...
+VAPI_API_KEY=...
+VAPI_PUBLIC_KEY=...
+```
+
+### Frontend Setup
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### 3. Lens Studio (Seller Scanning)
-- Open `lens-studio/vibe-seller-scan.lsproj`
-- Build AR lens with real-time object detection
-- Connect to backend WebSocket for labels
+### Database Seeding
+```bash
+cd backend
+python seed_data.py  # Seeds Elasticsearch + Supabase with 40 listings
+```
+
+**Dataset**: 40 vacation rental listings across 30 US cities with GPS coordinates
 
 ---
 
-## 🎬 DEMO FLOW
+## Project Structure
 
-### Buyer Side:
-1. Open app → "I want a beach house"
-2. AI asks follow-ups → fills in location, dates, guests, budget
-3. Shows 15 Tinder cards matching criteria
-4. Swipe right on 3 properties
-5. View auto-organized saved list
-6. Click card → message seller OR book directly
-
-### Seller Side:
-1. Put on Spectacles
-2. App guides scanning: "Point at each room"
-3. AR labels appear in real-time: "Pool ✓", "Kitchen ✓"
-4. Scan completes → best photos auto-selected
-5. Chatbot shows listing → seller makes tweaks
-6. Select available dates in calendar
-7. AI suggests prices → seller confirms
-8. Publish → listing goes live
+```
+vibe/
+├── frontend/
+│   ├── app/
+│   │   ├── discover/
+│   │   │   ├── text/page.tsx      # Text-based search UI
+│   │   │   ├── voice/page.tsx     # Voice interface with Vapi
+│   │   │   └── swipe/page.tsx     # Tinder-inspired cards
+│   │   ├── sell/                  # Host flow (demo only)
+│   │   └── components/            # Shared UI components
+│   └── lib/
+│       └── api.ts                 # API client wrapper
+│
+├── backend/
+│   ├── main.py                    # All route handlers
+│   ├── services/
+│   │   ├── conversation_service.py  # Multi-turn search
+│   │   ├── vision_service.py        # Image analysis
+│   │   ├── letta_service.py         # User memory
+│   │   ├── pricing_service.py       # Market analysis
+│   │   └── voice_service.py         # Transcription
+│   ├── utils/
+│   │   ├── elastic_client.py        # Search engine
+│   │   ├── supabase_client.py       # Database
+│   │   └── geocoding.py             # GPS mapping
+│   ├── agents/fetch_agents/         # Autonomous agents
+│   ├── seed_data.py                 # Database seeding
+│   └── test_*.py                    # Test scripts
+│
+└── README.md
+```
 
 ---
 
-Built with ❤️ for CalHacks 2025
+## Development & Testing
+
+### Running Tests
+```bash
+cd backend
+
+# Test conversational search
+python test_buyer_seller_flows.py
+
+# Test geo-search with all cities
+python test_geo_direct.py
+
+# Test full integration
+python test_comprehensive.py
+```
+
+### Architecture Decisions
+
+**Why FastAPI?**
+- Native async/await support for concurrent API calls
+- Automatic OpenAPI docs
+- Pydantic validation
+- Fast enough for hackathon scale
+
+**Why Next.js 16 App Router?**
+- Server + client components
+- Built-in routing
+- TypeScript support
+- Fast refresh for development
+
+**Why Elasticsearch?**
+- Vector search with hybrid queries
+- Geographic filtering
+- Scalable to millions of listings
+- Rich query DSL
+
+**Why Claude Sonnet 4.5?**
+- Best-in-class conversation capabilities
+- Excellent parameter extraction
+- Vision API for image analysis
+- Long context windows for conversation history
+
+**Why Groq?**
+- Fastest inference (important for real-time feel)
+- Good enough for parameter extraction
+- Whisper for audio transcription
+
+---
+
+## Performance Considerations
+
+**Conversational Search**: ~1-2s response time (Claude API call)
+**Search Execution**: ~500ms (Elasticsearch query + ranking)
+**Voice Transcription**: ~1-2s (Groq Whisper)
+**Voice Synthesis**: ~1-3s (Vapi 11labs)
+
+**Optimizations**:
+- Conversation state cached client-side
+- Elasticsearch results cached (5min TTL)
+- Lazy loading for images
+- Optimistic UI updates for swipes
+
+---
+
+Built for CalHacks 2025
