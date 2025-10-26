@@ -358,23 +358,6 @@ async def start_virtual_tour(listing_id: str):
 
 
 # ============================================================================
-# BLOCKCHAIN - REVIEWS & REPUTATION
-# ============================================================================
-
-@app.post("/api/reviews/submit")
-async def submit_review(listing_id: str, review: Dict[str, Any]):
-    """
-    ⛓️ Submit review to Sui blockchain
-
-    Sponsors: Sui
-
-    Immutable, tamper-proof reviews
-    """
-    # TODO: Implement Sui smart contract interaction
-    return {"success": True, "tx_hash": "0x..."}
-
-
-# ============================================================================
 # MONITORING & HEALTH
 # ============================================================================
 

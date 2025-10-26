@@ -257,16 +257,12 @@ async def conversational_search(request: ConversationRequest):
 @app.post("/api/search/execute")
 async def execute_search(request: SearchExecuteRequest):
     """
-    🔍 NEW: Execute search with dynamic geo-radius
+    🔍 NEW: Execute search with relevance threshold
 
-    Sponsors: Google Maps (geocoding), Elastic (geo_distance + vector search), Anthropic (ranking)
+    Sponsors: Elastic (vector search), Anthropic (ranking)
 
-    Features:
-    - Converts location string to coordinates using Google Maps API
-    - Dynamically adjusts radius based on location type (city vs neighborhood)
-    - Filters by actual geographic distance
-    - Auto-expands radius if too few results
-    - Returns listings with distance in miles
+    Only returns listings above relevance threshold (default 0.8).
+    Uses hybrid search (BM25 + semantic vectors).
     """
     try:
         params = request.extracted_params
@@ -292,39 +288,15 @@ async def execute_search(request: SearchExecuteRequest):
             filters["bedrooms"] = params["bedrooms"]
         if params.get("amenities"):
             filters["amenities"] = params["amenities"]
+        if params.get("location"):
+            filters["location"] = params["location"]
 
-        # NEW: Geocode location and use geo-search
-        location_str = params.get("location", "")
-        geo_data = None
-        radius_miles = 25  # Default radius
-
-        if location_str:
-            # Geocode location to coordinates
-            geo_data = await geocoding_service.geocode(location_str)
-
-            if geo_data:
-                # Calculate dynamic radius based on location type
-                radius_miles = geocoding_service.calculate_dynamic_radius(geo_data)
-
-        # Execute search (geo-search if we have coordinates, otherwise fallback)
-        if geo_data:
-            listings = await elastic_client.geo_search(
-                query_text=query_text,
-                latitude=geo_data["lat"],
-                longitude=geo_data["lon"],
-                radius_miles=radius_miles,
-                filters=filters,
-                limit=100
-            )
-        else:
-            # Fallback to regular hybrid search
-            if params.get("location"):
-                filters["location"] = params["location"]
-            listings = await elastic_client.hybrid_search(
-                query_text=query_text,
-                filters=filters,
-                limit=100
-            )
+        # Use hybrid search for better results
+        listings = await elastic_client.hybrid_search(
+            query_text=query_text,
+            filters=filters,
+            limit=100  # Get more, then filter by threshold
+        )
 
         # Filter by relevance threshold
         threshold = request.relevance_threshold
@@ -332,30 +304,6 @@ async def execute_search(request: SearchExecuteRequest):
             listing for listing in listings
             if listing.get("relevance_score", 0) >= threshold
         ]
-
-        # Auto-adjust radius if too few results
-        if len(filtered_listings) < 5 and geo_data:
-            # Expand radius and try again
-            new_radius = geocoding_service.adjust_radius_based_on_results(
-                current_radius=radius_miles,
-                result_count=len(filtered_listings),
-                target_results=20
-            )
-
-            if new_radius != radius_miles:
-                radius_miles = new_radius
-                listings = await elastic_client.geo_search(
-                    query_text=query_text,
-                    latitude=geo_data["lat"],
-                    longitude=geo_data["lon"],
-                    radius_miles=radius_miles,
-                    filters=filters,
-                    limit=100
-                )
-                filtered_listings = [
-                    listing for listing in listings
-                    if listing.get("relevance_score", 0) >= threshold
-                ]
 
         # Update Letta memory
         if request.user_id:
@@ -370,13 +318,7 @@ async def execute_search(request: SearchExecuteRequest):
             "matches": filtered_listings,
             "total_matches": len(filtered_listings),
             "threshold": threshold,
-            "radius_miles": radius_miles,  # UPDATED: Dynamic radius
-            "center_coordinates": {
-                "lat": geo_data["lat"],
-                "lon": geo_data["lon"]
-            } if geo_data else None,
-            "location_display": geo_data["display_name"] if geo_data else location_str,
-            "using_geocoding": geo_data is not None
+            "hardcoded_radius_miles": 25  # TODO: Implement Maps API radius
         }
 
     except Exception as e:
@@ -612,6 +554,10 @@ class PreferenceAnalysisRequest(BaseModel):
     image_urls: List[str]
     text_description: Optional[str] = ""
 
+class HumanizePreferencesRequest(BaseModel):
+    """Request to convert raw preferences to human-readable text"""
+    preferences: Dict[str, Any]
+
 @app.post("/api/filter-photos")
 async def filter_photos(request: ImageFilterRequest):
     """
@@ -695,6 +641,49 @@ async def analyze_preferences(request: PreferenceAnalysisRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/humanize-preferences")
+async def humanize_preferences(request: HumanizePreferencesRequest):
+    """
+    ✨ Convert raw preference data to human-readable text
+
+    Sponsor: Groq (fast inference)
+
+    Takes structured preference data and converts it to natural language
+    for displaying to users.
+    """
+    try:
+        prompt = f"""Convert these preference data into a natural, human-readable list of 3-5 short phrases that describe what the user likes. Make it sound natural and conversational.
+
+Preference data: {request.preferences}
+
+Guidelines:
+- Convert technical terms to natural language (e.g., "architectural_style: modern" → "modern architecture")
+- Combine related items naturally (e.g., "pool, deck, windows" → "outdoor entertaining spaces with pools")
+- Keep each phrase short and punchy (3-6 words)
+- Focus on the most distinctive/interesting preferences
+- Return ONLY a comma-separated list, no explanations
+
+Example output: "contemporary architectural design, luxury modern spaces, natural light"
+"""
+
+        response = await groq_service.generate_completion(
+            prompt=prompt,
+            temperature=0.7,
+            max_tokens=100
+        )
+
+        # Clean up the response
+        humanized_text = response.strip()
+
+        return {
+            "success": True,
+            "humanized_text": humanized_text
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/optimize-listing")
 async def optimize_listing(request: ListingOptimizeRequest):
     """
@@ -747,8 +736,8 @@ async def optimize_listing(request: ListingOptimizeRequest):
         listing_data["qa_pairs"] = qa_pairs
         listing = await supabase_client.create_listing(listing_data)
 
-        # Step 7: Index in Elastic for semantic search (with geocoding)
-        await elastic_client.index_listing(listing, geocoding_service=geocoding_service)
+        # Step 7: Index in Elastic for semantic search
+        await elastic_client.index_listing(listing)
 
         return {
             "success": True,
@@ -894,8 +883,8 @@ async def publish_listing(request: ConfirmPricingRequest):
         # Save to Supabase (would update in real implementation)
         # await supabase_client.update_listing(request.listing_id, listing)
 
-        # Index in Elasticsearch for searchability (with geocoding)
-        await elastic_client.index_listing(listing, geocoding_service=geocoding_service)
+        # Index in Elasticsearch for searchability
+        await elastic_client.index_listing(listing)
 
         return {
             "success": True,

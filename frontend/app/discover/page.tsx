@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Menu, X, Pencil, Mic, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 
+// TODO: add idea on top, gradient under for contrast
 export default function DiscoverPage() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -123,6 +124,18 @@ export default function DiscoverPage() {
                 className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 hover:bg-black/10 transition-all px-4 py-2 rounded-lg w-full text-left"
               >
                 Discover
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push('/discover/swipe/wishlist');
+                  setSidebarOpen(false);
+                }}
+                className="text-4xl font-melodrame italic text-stone-900 hover:text-stone-600 hover:bg-black/10 transition-all px-4 py-2 rounded-lg w-full text-left"
+              >
+                Wishlist
               </button>
             </li>
             <li>

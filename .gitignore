@@ -50,3 +50,8 @@ coverage/
 # SSL certificates (local HTTPS testing)
 backend/certs/
 *.pem
+# ML Models
+*.pt
+*.pth
+*.onnx
+*.h5

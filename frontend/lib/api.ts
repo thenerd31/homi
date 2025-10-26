@@ -271,6 +271,25 @@ export class VibeAPI {
     return response.json();
   }
 
+  async humanizePreferences(preferences: Record<string, any>): Promise<{
+    success: boolean;
+    humanized_text: string;
+  }> {
+    const response = await fetch(`${this.baseUrl}/api/humanize-preferences`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ preferences }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Humanize preferences failed: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
   async health(): Promise<{ status: string; services: Record<string, boolean> }> {
     const response = await fetch(`${this.baseUrl}/health`);
 

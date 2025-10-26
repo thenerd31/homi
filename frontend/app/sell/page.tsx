@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Menu, X, Glasses, ScanLine, Heart, Star } from 'lucide-react';
+import { Menu, X, Glasses, ScanLine, Heart } from 'lucide-react';
+import StarIcon from "@mui/icons-material/Star";
 import Image from 'next/image';
 
 // TODO: change hardcoded data
@@ -14,7 +15,7 @@ const USER_LISTINGS = [
     bedrooms: 1,
     bathrooms: 1,
     rating: 4.99,
-    image: '/images/peaceful-private-room-B-3-min-walk-to-ocean-beach/ocean_beach_1.avif',
+    image: '/images/golden-gateway/golden-gateway1.avif',
   },
   {
     id: 2,
@@ -23,7 +24,7 @@ const USER_LISTINGS = [
     bedrooms: 1,
     bathrooms: 1,
     rating: 4.97,
-    image: '/images/classic-private-room-in-west-LA/west_la_1.avif',
+    image: '/images/morrocan-home/morrocan-home1.avif',
   },
   {
     id: 3,
@@ -32,7 +33,7 @@ const USER_LISTINGS = [
     bedrooms: 1,
     bathrooms: 1,
     rating: 4.99,
-    image: '/images/suite-A-Azure-Anticipation/suite-1.avif',
+    image: '/images/ritzy-room/ritzy-room1.avif',
   },
   {
     id: 4,
@@ -41,7 +42,7 @@ const USER_LISTINGS = [
     bedrooms: 1,
     bathrooms: 1,
     rating: 4.97,
-    image: '/images/peaceful-private-room-B-3-min-walk-to-ocean-beach/ocean_beach_2.avif',
+    image: '/images/victorian-home/victorian_home1.avif',
   },
 ];
 
@@ -108,9 +109,9 @@ export default function SellPage() {
 
               <button
                 type="button"
-                onClick={() => router.push('/sell/create')}
+                onClick={() => router.push('/sell/scan')}
                 className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 hover:bg-white/30 hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg active:scale-95"
-                aria-label="Create with AI"
+                aria-label="Scan with Phone"
               >
                 <ScanLine className="w-6 h-6 text-white" strokeWidth={2} />
               </button>
@@ -132,7 +133,7 @@ export default function SellPage() {
             <div
               key={listing.id}
               className="relative rounded-2xl overflow-hidden shadow-lg cursor-pointer hover:scale-105 transition-transform duration-300"
-              onClick={() => router.push(`/listing/${listing.id}`)}
+              onClick={() => router.push(`/listing`)}
             >
               {/* Image */}
               <div className="relative w-full aspect-[3/4]">
@@ -165,8 +166,8 @@ export default function SellPage() {
                   {listing.guests} guests, {listing.bedrooms} bedroom{listing.bedrooms > 1 ? 's' : ''}, {listing.bathrooms} bath{listing.bathrooms > 1 ? 's' : ''}
                 </p>
                 <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                  <span className="text-white text-sm font-semibold">{listing.rating}</span>
+                  <span className="text-white text-sm font-semibold"></span>
+                  <span className="text-white text-sm font-semibold">{listing.rating} <StarIcon sx={{ fontSize: "0.85em", color: "#facc15", verticalAlign: "middle" }} /> </span>
                 </div>
               </div>
             </div>
