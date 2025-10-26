@@ -85,6 +85,7 @@ export default function PropertyMap({ location, className = '' }: PropertyMapPro
   return (
     <div className={`rounded-xl overflow-hidden shadow-lg ${className}`}>
       <MapContainer
+        key={`${coords.lat}-${coords.lon}`}
         center={[coords.lat, coords.lon]}
         zoom={13}
         style={{ height: '100%', width: '100%', minHeight: '300px' }}

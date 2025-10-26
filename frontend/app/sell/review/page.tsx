@@ -254,6 +254,8 @@ export default function ReviewPage() {
   const [propertyLocation, setPropertyLocation] = useState(initialData.location);
   const [isEditingLocation, setIsEditingLocation] = useState(false);
   const [tempLocation, setTempLocation] = useState(initialData.location);
+  const [validatedLocation, setValidatedLocation] = useState(initialData.location);
+  const [locationError, setLocationError] = useState('');
 
   // Step 1: Room Information
   const [roomData, setRoomData] = useState<RoomData>({
@@ -314,6 +316,44 @@ export default function ReviewPage() {
         ? prev.filter(id => id !== amenityId)
         : [...prev, amenityId]
     );
+  };
+
+  const validateAndSaveLocation = async () => {
+    if (!tempLocation.trim()) {
+      setLocationError('Please enter a valid address');
+      return;
+    }
+
+    setLocationError('');
+    console.log('🔍 Validating location:', tempLocation);
+
+    try {
+      // Call geocoding API to validate location
+      const response = await fetch(`http://localhost:8000/api/geocode?location=${encodeURIComponent(tempLocation)}`);
+
+      if (!response.ok) {
+        throw new Error('Geocoding failed');
+      }
+
+      const data = await response.json();
+
+      // Backend returns either 'formatted_address' or 'location'
+      const validatedAddr = data.formatted_address || data.location;
+
+      if (validatedAddr) {
+        console.log('✅ Location validated:', validatedAddr);
+        // Use the formatted address from geocoding
+        setPropertyLocation(validatedAddr);
+        setValidatedLocation(validatedAddr);
+        setTempLocation(validatedAddr);
+        setIsEditingLocation(false);
+      } else {
+        setLocationError('Could not validate this address. Try format: "123 Main St, City, State ZIP"');
+      }
+    } catch (error) {
+      console.error('❌ Location validation error:', error);
+      setLocationError('Could not validate address. Please check and try again.');
+    }
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -520,6 +560,7 @@ export default function ReviewPage() {
         console.log('  Title:', data.title);
         console.log('  Price:', data.suggested_price);
         console.log('  Amenities:', data.amenities);
+        console.log('  Property Analysis:', data.property_analysis);
 
         // Update state with AI-generated content
         if (data.title && data.title !== '') {
@@ -543,6 +584,21 @@ export default function ReviewPage() {
           console.log('⚠️ No amenities in response or empty array');
         }
 
+        // Update room data from property_analysis if available
+        if (data.property_analysis) {
+          const { bedrooms, bathrooms } = data.property_analysis;
+          if (bedrooms || bathrooms) {
+            console.log('🏠 Updating room data from AI analysis:', { bedrooms, bathrooms });
+            setRoomData(prev => ({
+              ...prev,
+              bedrooms: bedrooms || prev.bedrooms,
+              bathrooms: bathrooms || prev.bathrooms,
+              guests: Math.max((bedrooms || prev.bedrooms) * 2, 2),
+              beds: bedrooms || prev.beds,
+            }));
+          }
+        }
+
         setAnalysisComplete(true);
       } catch (error) {
         console.error('❌ Error analyzing scan data:', error);
@@ -558,6 +614,28 @@ export default function ReviewPage() {
     analyzeScanData();
   }, [fetchedScanData]); // Run when fetchedScanData loads
 
+  // Helper function to infer room counts from room_breakdown
+  const inferRoomCounts = (room_breakdown: Record<string, number>) => {
+    let bedrooms = 0;
+    let bathrooms = 0;
+
+    // Count bedrooms from room_breakdown
+    Object.keys(room_breakdown).forEach(room => {
+      const roomLower = room.toLowerCase();
+      if (roomLower.includes('bedroom') || roomLower === 'bedroom') {
+        bedrooms += 1;
+      } else if (roomLower.includes('bathroom') || roomLower === 'bathroom' || roomLower === 'bath') {
+        bathrooms += 1;
+      }
+    });
+
+    // Default to at least 1 bedroom and 1 bathroom if none found
+    return {
+      bedrooms: Math.max(bedrooms, 1),
+      bathrooms: Math.max(bathrooms, 1)
+    };
+  };
+
   // Update state when fetchedScanData loads
   useEffect(() => {
     if (fetchedScanData) {
@@ -568,20 +646,25 @@ export default function ReviewPage() {
       }
 
       console.log('🏷️ Updating amenities from fetched scan data:', fetchedScanData.amenities);
-      if (fetchedScanData.amenities) {
-        // Will be updated by AI analysis, but set initial values
-        // The AI analysis will map these to UI amenity IDs
-      }
 
       console.log('🏠 Updating room data from fetched scan data');
-      if (fetchedScanData.summary) {
-        setRoomData({
-          guests: Math.max((fetchedScanData.summary.bedrooms || 1) * 2, 2),
-          bedrooms: fetchedScanData.summary.bedrooms || 1,
-          beds: fetchedScanData.summary.bedrooms || 1,
-          bathrooms: fetchedScanData.summary.bathrooms || 1,
-        });
+      // Try to infer room counts from room_breakdown first
+      let roomCounts = { bedrooms: 1, bathrooms: 1 };
+      if (fetchedScanData.room_breakdown) {
+        roomCounts = inferRoomCounts(fetchedScanData.room_breakdown);
+        console.log('📊 Inferred from room_breakdown:', roomCounts);
       }
+
+      // Use summary if available, otherwise use inferred counts
+      const bedroomsCount = fetchedScanData.summary?.bedrooms || roomCounts.bedrooms;
+      const bathroomsCount = fetchedScanData.summary?.bathrooms || roomCounts.bathrooms;
+
+      setRoomData({
+        guests: Math.max(bedroomsCount * 2, 2),
+        bedrooms: bedroomsCount,
+        beds: bedroomsCount, // Assume 1 bed per bedroom
+        bathrooms: bathroomsCount,
+      });
     }
   }, [fetchedScanData]);
 
@@ -798,18 +881,26 @@ export default function ReviewPage() {
               <input
                 type="text"
                 value={tempLocation}
-                onChange={(e) => setTempLocation(e.target.value)}
+                onChange={(e) => {
+                  setTempLocation(e.target.value);
+                  setLocationError(''); // Clear error on input change
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    validateAndSaveLocation();
+                  }
+                }}
                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-gray-500 mb-2"
                 placeholder="Enter address..."
                 autoFocus
               />
+              {locationError && (
+                <p className="text-red-400 text-xs mb-2">{locationError}</p>
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setPropertyLocation(tempLocation);
-                    setIsEditingLocation(false);
-                  }}
+                  onClick={validateAndSaveLocation}
                   className="px-4 py-2 bg-white text-black rounded-lg text-sm font-semibold hover:bg-gray-200 transition"
                 >
                   Save
@@ -819,6 +910,7 @@ export default function ReviewPage() {
                   onClick={() => {
                     setTempLocation(propertyLocation);
                     setIsEditingLocation(false);
+                    setLocationError('');
                   }}
                   className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm hover:bg-gray-700 transition"
                 >
@@ -831,6 +923,7 @@ export default function ReviewPage() {
               onClick={() => {
                 setTempLocation(propertyLocation);
                 setIsEditingLocation(true);
+                setLocationError('');
               }}
               className="text-gray-400 text-sm mb-4 cursor-pointer hover:text-white transition flex items-center gap-2"
             >
@@ -839,7 +932,7 @@ export default function ReviewPage() {
             </div>
           )}
 
-          <PropertyMap location={propertyLocation} className="w-full h-64" />
+          <PropertyMap key={validatedLocation} location={validatedLocation} className="w-full h-64" />
         </div>
       </div>
 
@@ -1240,18 +1333,26 @@ export default function ReviewPage() {
               <input
                 type="text"
                 value={tempLocation}
-                onChange={(e) => setTempLocation(e.target.value)}
+                onChange={(e) => {
+                  setTempLocation(e.target.value);
+                  setLocationError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    validateAndSaveLocation();
+                  }
+                }}
                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-gray-500 mb-2"
                 placeholder="Enter address..."
                 autoFocus
               />
+              {locationError && (
+                <p className="text-red-400 text-xs mb-2">{locationError}</p>
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setPropertyLocation(tempLocation);
-                    setIsEditingLocation(false);
-                  }}
+                  onClick={validateAndSaveLocation}
                   className="px-4 py-2 bg-white text-black rounded-lg text-sm font-semibold hover:bg-gray-200 transition"
                 >
                   Save
@@ -1261,6 +1362,7 @@ export default function ReviewPage() {
                   onClick={() => {
                     setTempLocation(propertyLocation);
                     setIsEditingLocation(false);
+                    setLocationError('');
                   }}
                   className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm hover:bg-gray-700 transition"
                 >
@@ -1273,6 +1375,7 @@ export default function ReviewPage() {
               onClick={() => {
                 setTempLocation(propertyLocation);
                 setIsEditingLocation(true);
+                setLocationError('');
               }}
               className="text-gray-400 text-sm mb-4 cursor-pointer hover:text-white transition flex items-center gap-2"
             >
@@ -1280,7 +1383,7 @@ export default function ReviewPage() {
               <span className="text-xs">✏️</span>
             </div>
           )}
-          <PropertyMap location={propertyLocation} className="w-full h-64" />
+          <PropertyMap key={validatedLocation} location={validatedLocation} className="w-full h-64" />
         </div>
 
         <div className="mb-8">

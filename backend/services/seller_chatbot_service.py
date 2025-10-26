@@ -102,11 +102,16 @@ Would you like to make any changes?"""
         """
 
         # Build context for Claude
+        # Strip out base64 photo data to avoid token limit (photos can be 100k+ tokens each)
+        listing_for_context = {k: v for k, v in current_listing.items() if k != 'photos'}
+        if 'photos' in current_listing:
+            listing_for_context['photos_count'] = len(current_listing.get('photos', []))
+
         context = f"""You are a helpful assistant helping a seller review their vacation rental listing.
 
 **Current Listing Data:**
 ```json
-{json.dumps(current_listing, indent=2)}
+{json.dumps(listing_for_context, indent=2)}
 ```
 
 **Current Stage:** {current_stage}
@@ -162,12 +167,25 @@ Examples:
   → action: "edit", field: "price", new_value: 180 (or 260), message: "Got it! I've updated your nightly rate to $180."
 
 **Important Date Validation:**
-- Today is {date.today().isoformat()} (use this as reference!)
-- Rule 1: Start date CANNOT be before today. If user provides a past start date, respond:
-  "The start date [their date] is before today ({date.today().strftime('%B %d, %Y')}). Please provide a start date after today, for example [suggest date 1 week from today]."
-- Rule 2: End date MUST be after start date. If end date is before or same as start date, respond:
-  "The end date must be after the start date. Please provide valid dates."
-- Rule 3: If BOTH dates are valid (start > today AND end > start), accept them and proceed to set_pricing stage
+- Today's date is: {date.today().isoformat()} (YYYY-MM-DD format)
+- A date is "in the future" if it comes AFTER today chronologically
+- A date is "in the past" if it comes BEFORE today chronologically
+
+**Rules:**
+1. Start date MUST be today or later (start_date >= {date.today().isoformat()})
+   - If start_date < {date.today().isoformat()}, reject with: "The start date is in the past. Please provide a date from today ({date.today().strftime('%B %d, %Y')}) onwards."
+
+2. End date MUST be after start date (end_date > start_date)
+   - If end_date <= start_date, reject with: "The end date must be after the start date."
+
+3. If BOTH conditions pass, accept the dates and set next_stage to "set_pricing"
+
+**Example:**
+- Today is 2025-10-26
+- User says "November 1st to 5th, 2025" → start: 2025-11-01, end: 2025-11-05
+- Check: 2025-11-01 >= 2025-10-26? YES (November is AFTER October)
+- Check: 2025-11-05 > 2025-11-01? YES
+- Result: VALID, accept and proceed to set_pricing
 
 For amenities, use these exact IDs: "tv", "kitchen", "projector", "laundry", "pool", "fitness", "parking"
 Be conversational and helpful!
