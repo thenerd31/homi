@@ -94,7 +94,7 @@ export default function ReviewPage() {
   const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(0);
 
-  // Parse initial data from URL params or localStorage (from video upload)
+  // Parse initial data from URL params or localStorage (from video upload or scan)
   const getInitialData = () => {
     // Try to get data from URL params first
     const urlTitle = searchParams.get('title');
@@ -117,11 +117,30 @@ export default function ReviewPage() {
         bathrooms: urlBathrooms ? parseInt(urlBathrooms) : 1,
         amenities: urlAmenities ? urlAmenities.split(',') : ['tv', 'kitchen', 'projector'],
         price: urlPrice ? parseInt(urlPrice) : 168,
+        photos: [],
       };
     }
 
-    // Otherwise try localStorage (set from video upload page)
+    // Otherwise try localStorage
     if (typeof window !== 'undefined') {
+      // Try detected_listing from scan page first
+      const detectedListing = localStorage.getItem('detected_listing');
+      if (detectedListing) {
+        const parsed = JSON.parse(detectedListing);
+        return {
+          title: parsed.title || 'Sunny Studio in Downtown SF',
+          location: parsed.location || '8375 Fremont St, San Francisco, CA, 00000',
+          guests: parsed.guests || 6,
+          bedrooms: parsed.bedrooms || 2,
+          beds: parsed.beds || 3,
+          bathrooms: parsed.bathrooms || 1,
+          amenities: parsed.amenities_detected || parsed.amenities || ['tv', 'kitchen', 'projector'],
+          price: parsed.suggested_price || parsed.price || 168,
+          photos: parsed.photos || [],
+        };
+      }
+
+      // Fall back to propertyData from manual upload
       const storedData = localStorage.getItem('propertyData');
       if (storedData) {
         const parsed = JSON.parse(storedData);
@@ -134,6 +153,7 @@ export default function ReviewPage() {
           bathrooms: parsed.bathrooms || 1,
           amenities: parsed.amenities || ['tv', 'kitchen', 'projector'],
           price: parsed.price || 168,
+          photos: parsed.photos || [],
         };
       }
     }
@@ -148,6 +168,7 @@ export default function ReviewPage() {
       bathrooms: 1,
       amenities: ['tv', 'kitchen', 'projector'],
       price: 168,
+      photos: [],
     };
   };
 
@@ -190,7 +211,7 @@ export default function ReviewPage() {
   });
 
   // Photos
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<string[]>(initialData.photos || []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Chat input and messages
